@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dolarame Board</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="./shared.css" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'DM Sans', Arial, sans-serif;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: 'Syne', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -.01em;
+    }
+
+    .sub {
+      color: var(--muted);
+      margin-top: 4px;
+      font-size: 14px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .last-updated {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .btn-refresh {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      background: var(--primary);
+      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+
+    .btn-refresh:hover {
+      opacity: .88;
+    }
+
+    .btn-refresh:active {
+      transform: scale(.97);
+    }
+
+    .btn-refresh:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .btn-refresh svg {
+      width: 15px;
+      height: 15px;
+      transition: transform .6s ease;
+    }
+
+    .btn-refresh.loading svg {
+      animation: spin .7s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ── KPIs ── */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .kpi {
+      padding: 20px;
+    }
+
+    .kpi .l {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: #9a9891;
+      font-weight: 700;
+    }
+
+    .kpi .v {
+      font-size: 24px;
+      font-weight: 800;
+      font-family: 'Syne', sans-serif;
+      margin-top: 10px;
+    }
+
+    .kpi .m {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* skeleton para KPIs */
+    .skel {
+      background: linear-gradient(90deg, #e8e6e1 25%, #f0ede8 50%, #e8e6e1 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+      height: 1em;
+    }
+
+    .skel-v {
+      height: 1.6em;
+      width: 70%;
+      margin-top: 10px;
+    }
+
+    .skel-m {
+      height: .9em;
+      width: 90%;
+      margin-top: 8px;
+    }
+
+    @keyframes shimmer {
+      to {
+        background-position: -200% 0;
+      }
+    }
+
+    /* ── Estado de loading / erro / vazio ── */
+    .state-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 64px 24px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .state-box svg {
+      opacity: .35;
+    }
+
+    .state-box p {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .state-box small {
+      font-size: 13px;
+      opacity: .75;
+    }
+
+    .spinner-ring {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    /* ── Tabela ── */
+    .table-card {
+      overflow: auto;
+    }
+
+    .table-card table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1600px;
+    }
+
+    .table-card th,
+    .table-card td {
+      padding: 16px;
+      border-bottom: 1px solid var(--divider);
+      vertical-align: top;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    .table-card th {
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+      z-index: 1;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #9a9891;
+      font-weight: 700;
+    }
+
+    .table-card tr:last-child td {
+      border-bottom: none;
+    }
+
+    .table-card tbody tr {
+      transition: background .12s;
+    }
+
+    .table-card tbody tr:hover {
+      background: rgba(1, 105, 111, .03);
+    }
+
+    .name {
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .meta,
+    .subt {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    /* badge de venda */
+    .sale {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      min-width: 128px;
+    }
+
+    .recent {
+      background: rgba(67, 122, 34, .08);
+      color: var(--success);
+      border-color: rgba(67, 122, 34, .16);
+    }
+
+    .attention {
+      background: rgba(209, 153, 0, .10);
+      color: #9b6c00;
+      border-color: rgba(209, 153, 0, .18);
+    }
+
+    .warn {
+      background: rgba(218, 113, 1, .10);
+      color: #a85600;
+      border-color: rgba(218, 113, 1, .18);
+    }
+
+    .critical {
+      background: rgba(161, 53, 68, .10);
+      color: var(--error);
+      border-color: rgba(161, 53, 68, .18);
+    }
+
+    .no-sale {
+      background: rgba(111, 108, 101, .08);
+      color: var(--muted);
+      border-color: rgba(111, 108, 101, .18);
+    }
+
+    /* criativos */
+    .creative {
+      display: grid;
+      gap: 6px;
+      min-width: 200px;
+    }
+
+    .tag {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(1, 105, 111, .10);
+      color: var(--primary);
+      margin-left: 4px;
+    }
+
+    .ad-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    /* Status dot agora é um ícone colorido por status */
+    .ad-status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot-active {
+      background: var(--success);
+    }
+
+    .dot-paused {
+      background: #e5a800;
+    }
+
+    /* amarelo */
+    .dot-other {
+      background: var(--error);
+    }
+
+    /* vermelho para demais status */
+
+    /* Texto do criativo muda de cor conforme status */
+    .ad-item.status-paused {
+      color: #9b6c00;
+    }
+
+    .ad-item.status-other {
+      color: var(--error);
+    }
+
+    .ad-item.status-active {
+      color: var(--text);
+    }
+
+    .decision {
+      max-width: 280px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      font-size: 13px;
+    }
+
+    .decision strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .dash-val {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Webhook config ── */
+    .webhook-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .webhook-bar label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #9a9891;
+      white-space: nowrap;
+    }
+
+    .webhook-bar input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      font-family: 'DM Sans', monospace;
+      font-size: 13px;
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    .webhook-bar input:focus {
+      border-color: var(--primary);
+    }
+
+    .badge-status {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .bs-ok {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    .bs-err {
+      background: var(--error-soft);
+      color: var(--error);
+    }
+
+    .bs-idle {
+      background: rgba(111, 108, 101, .1);
+      color: var(--muted);
+    }
+
+    /* ── Date range picker ── */
+    .date-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-wrap: wrap;
+    }
+
+    .date-bar label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #9a9891;
+      white-space: nowrap;
+    }
+
+    .date-presets {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      padding: 5px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    .preset-btn.active {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .date-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    .date-inputs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .date-inputs span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .date-input {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s;
+      cursor: pointer;
+    }
+
+    .date-input:focus {
+      border-color: var(--primary);
+    }
+
+    .date-input::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: .6;
+    }
+
+    .date-range-label {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      margin-left: auto;
+    }
+
+    .date-range-label strong {
+      color: var(--primary);
+      font-weight: 700;
+    }
+  </style>
+  </style>
+</head>
+
+<body>
+  <div class="dash">
+    <aside class="side">
+      <div class="logo">
+        <!-- Logo oficial Dolarame -->
+        <img src="https://www.dolarame.com.br/wp-content/uploads/2022/11/dolarame_logo_verde-claro_verde-escuro.png"
+          alt="Dolarame" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+        <!-- Fallback de texto caso a imagem falhe -->
+        <span
+          style="display:none; font-family:'Syne',sans-serif; font-size:18px; font-weight:800; color:var(--primary);">Dolarame</span>
+      </div>
+      <div data-shared-nav></div>
+    </aside>
+
+    <main class="main">
+      <div class="top">
+        <div>
+          <h1>Painel de tráfego pago</h1>
+          <div class="sub" id="subtitle">Configure o webhook e clique em Atualizar.</div>
+        </div>
+        <div class="top-actions">
+          <span class="last-updated" id="lastUpdated"></span>
+          <button class="btn-refresh" id="btnRefresh" onclick="fetchData()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M23 4v6h-6" />
+              <path d="M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            Atualizar
+          </button>
+        </div>
+      </div>
+
+      <!-- Webhook config -->
+      <div class="webhook-bar">
+        <label>Webhook N8N</label>
+        <input type="text" id="webhookUrl" placeholder="https://seu-n8n.com/webhook/xyz" />
+        <span class="badge-status bs-idle" id="statusBadge">Aguardando</span>
+      </div>
+
+      <!-- Date range picker -->
+      <div class="date-bar">
+        <label>Período</label>
+        <div class="date-presets">
+          <button class="preset-btn" data-days="0">Hoje</button>
+          <button class="preset-btn" data-days="6">7 dias</button>
+          <button class="preset-btn active" data-days="29">30 dias</button>
+          <button class="preset-btn" data-days="89">90 dias</button>
+        </div>
+        <div class="date-divider"></div>
+        <div class="date-inputs">
+          <input type="date" class="date-input" id="startDate" />
+          <span>→</span>
+          <input type="date" class="date-input" id="endDate" />
+        </div>
+        <span class="date-range-label" id="dateRangeLabel"></span>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpis" id="kpisArea">
+        <div class="card kpi">
+          <div class="l">Receita total</div>
+          <div class="skel skel-v"></div>
+          <div class="skel skel-m"></div>
+        </div>
+        <div class="card kpi">
+          <div class="l">Investimento total</div>
+          <div class="skel skel-v"></div>
+          <div class="skel skel-m"></div>
+        </div>
+        <div class="card kpi">
+          <div class="l">CPL médio</div>
+          <div class="skel skel-v"></div>
+          <div class="skel skel-m"></div>
+        </div>
+        <div class="card kpi">
+          <div class="l">Conjuntos ativos</div>
+          <div class="skel skel-v"></div>
+          <div class="skel skel-m"></div>
+        </div>
+      </div>
+
+      <!-- Tabela -->
+      <div class="card table-card" id="tableArea">
+        <div class="state-box">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 3h18v18H3z" rx="2" />
+            <path d="M3 9h18M9 21V9" />
+          </svg>
+          <p>Nenhum dado carregado.</p>
+          <small>Insira o URL do webhook e clique em Atualizar.</small>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="./shared-menu.js"></script>
+  <script>
+    // ── Helpers ──────────────────────────────────────────────────────────
+    const brl = v => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const brlInt = v => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    function daysSince(dateStr) {
+      if (!dateStr) return null;
+      const diff = Date.now() - new Date(dateStr).getTime();
+      return Math.floor(diff / 86400000);
+    }
+
+    function saleClass(days) {
+      if (days === null) return 'no-sale';
+      if (days <= 3) return 'recent';
+      if (days <= 7) return 'attention';
+      if (days <= 14) return 'warn';
+      return 'critical';
+    }
+
+    function saleLabel(days) {
+      if (days === null) return '<strong>—</strong><span class="subt">Sem registro</span>';
+      if (days === 0) return '<strong>Hoje</strong><span class="subt">Vendeu hoje</span>';
+      return `<strong>${days} dia${days !== 1 ? 's' : ''}</strong><span class="subt">Última venda</span>`;
+    }
+
+    // ── Status do criativo: dot + classe de cor no texto ─────────────────
+    function adStatusDot(status) {
+      if (!status) return '';
+      const s = status.toUpperCase();
+      if (s === 'ACTIVE') return `<span class="ad-status-dot dot-active"></span>`;
+      if (s === 'PAUSED') return `<span class="ad-status-dot dot-paused"></span>`;
+      return `<span class="ad-status-dot dot-other"></span>`;
+    }
+
+    function adItemClass(status) {
+      if (!status) return 'status-other';
+      const s = status.toUpperCase();
+      if (s === 'ACTIVE') return 'status-active';
+      if (s === 'PAUSED') return 'status-paused';
+      return 'status-other';
+    }
+
+    function dash(val) {
+      return (val === null || val === undefined || val === '')
+        ? '<span class="dash-val">—</span>'
+        : val;
+    }
+
+    // ── Ordenação por venda mais recente ─────────────────────────────────
+    function sortByLastSale(data) {
+      return [...data].sort((a, b) => {
+        const dateA = a.ad_sets?.resume?.lastSaleDate;
+        const dateB = b.ad_sets?.resume?.lastSaleDate;
+        // Sem data vai pro final
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return new Date(dateB) - new Date(dateA); // mais recente primeiro
+      });
+    }
+
+    // ── KPIs ─────────────────────────────────────────────────────────────
+    function renderKPIs(data) {
+      const totalRevenue = data.reduce((s, i) => s + (i.ad_sets?.resume?.totalConverted || 0), 0);
+      const totalSpend = data.reduce((s, i) => s + (i.ad_sets?.spend || 0), 0);
+      const totalLeads = data.reduce((s, i) => s + (i.ad_sets?.resume?.capturedCount || 0), 0);
+      const activeCount = data.filter(i => i.ad_sets?.effective_status === 'ACTIVE').length;
+      const roas = totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(2) : '—';
+      const cpl = totalLeads > 0 ? (totalSpend / totalLeads).toFixed(2) : '—';
+
+      document.getElementById('kpisArea').innerHTML = `
+        <div class="card kpi">
+          <div class="l">Receita total</div>
+          <div class="v">${brlInt(totalRevenue)}</div>
+          <div class="m">ROAS geral: ${roas}</div>
+        </div>
+        <div class="card kpi">
+          <div class="l">Investimento total</div>
+          <div class="v">${brlInt(totalSpend)}</div>
+          <div class="m">${data.length} conjuntos no total</div>
+        </div>
+        <div class="card kpi">
+          <div class="l">CPL médio</div>
+          <div class="v">R$ ${cpl}</div>
+          <div class="m">${totalLeads.toLocaleString('pt-BR')} leads captados</div>
+        </div>
+        <div class="card kpi">
+          <div class="l">Conjuntos ativos</div>
+          <div class="v">${activeCount}</div>
+          <div class="m">${data.length - activeCount} pausado${data.length - activeCount !== 1 ? 's' : ''}</div>
+        </div>
+      `;
+    }
+
+    // ── Tabela ───────────────────────────────────────────────────────────
+    function renderTable(data) {
+      // Ordena por última venda mais recente antes de renderizar
+      const sorted = sortByLastSale(data);
+
+      const rows = sorted.map(item => {
+        const campaign = item.campaign?.name || '—';
+        const adset = item.ad_sets || {};
+        const ads = item.ads || [];
+        const resume = adset.resume || {};
+
+        const days = daysSince(resume.lastSaleDate);
+        const sClass = saleClass(days);
+        const sLbl = saleLabel(days);
+
+        const status = adset.effective_status || '';
+        const statusTxt = status === 'ACTIVE' ? 'Ativo' : status === 'PAUSED' ? 'Pausado' : status || '—';
+
+        const spend = adset.spend != null ? brl(adset.spend) : '—';
+        const daily = adset.daily_budget != null ? brlInt(adset.daily_budget / 100) : '—';
+        const revenue = resume.totalConverted != null ? brl(resume.totalConverted) : '—';
+        const roas = (adset.spend && resume.totalConverted)
+          ? (resume.totalConverted / adset.spend).toFixed(2)
+          : null;
+        const cpl = (adset.spend && resume.capturedCount)
+          ? brl(adset.spend / resume.capturedCount)
+          : '—';
+        const cpr = resume.soldCount && adset.spend
+          ? brl(adset.spend / resume.soldCount)
+          : null;
+
+        // Criativos com cor por status
+        const creativesHtml = ads.length
+          ? ads.map((ad, idx) => {
+            const label = ad.name || `Criativo ${idx + 1}`;
+            const isFirst = idx === 0;
+            const itemClass = adItemClass(ad.effective_status);
+            return `<div class="ad-item ${itemClass}">${adStatusDot(ad.effective_status)}<span>${label}${isFirst ? '<span class="tag">Maior orçamento</span>' : ''}</span></div>`;
+          }).join('')
+          : '<span class="dash-val">—</span>';
+
+        return `
+          <tr>
+            <td>
+              <span class="name">${adset.name || '—'}</span>
+              <span class="meta">${campaign}</span>
+              <span class="meta">${statusTxt}</span>
+            </td>
+            <td>
+              <span class="sale ${sClass}">${sLbl}</span>
+            </td>
+            <td>
+              ${cpr ? cpr + '<span class="subt">por venda</span>' : dash(null)}
+            </td>
+            <td>
+              <div class="creative">${creativesHtml}</div>
+            </td>
+            <td>${cpl}</td>
+            <td>
+              <div class="decision">
+                <span class="dash-val">—</span>
+              </div>
+            </td>
+            <td>${daily}<span class="subt">por dia</span></td>
+            <td>${spend}</td>
+            <td>
+              ${revenue}
+              ${roas ? `<span class="subt">ROAS ${roas}</span>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('tableArea').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Nome do conjunto</th>
+              <th>Última venda ↓</th>
+              <th>Custo por resultado</th>
+              <th>Criativos</th>
+              <th>Custo por lead</th>
+              <th>Última decisão</th>
+              <th>Orçamento diário</th>
+              <th>Total gasto</th>
+              <th>Receita gerada</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    // ── Fetch principal ───────────────────────────────────────────────────
+    async function fetchData() {
+      const url = document.getElementById('webhookUrl').value.trim();
+      if (!url) {
+        alert('Insira o URL do webhook do N8N antes de atualizar.');
+        return;
+      }
+
+      const btn = document.getElementById('btnRefresh');
+      const badge = document.getElementById('statusBadge');
+      const sub = document.getElementById('subtitle');
+
+      btn.disabled = true;
+      btn.classList.add('loading');
+      badge.textContent = 'Carregando…';
+      badge.className = 'badge-status bs-idle';
+
+      document.getElementById('tableArea').innerHTML = `
+        <div class="state-box">
+          <div class="spinner-ring"></div>
+          <p>Buscando dados no N8N…</p>
+          <small>Isso pode levar alguns segundos.</small>
+        </div>
+      `;
+
+      document.getElementById('kpisArea').innerHTML = `
+        <div class="card kpi"><div class="l">Receita total</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi"><div class="l">Investimento total</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi"><div class="l">CPL médio</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi"><div class="l">Conjuntos ativos</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+      `;
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: 'dolarame-board',
+            timestamp: new Date().toISOString(),
+            startDate: document.getElementById('startDate').value,
+            endDate: document.getElementById('endDate').value,
+          }),
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        let raw = await res.json();
+        console.log('[Dolarame] Resposta bruta do N8N:', JSON.stringify(raw, null, 2));
+
+        let data = raw;
+
+        if (!Array.isArray(data)) {
+          if (Array.isArray(data.data)) data = data.data;
+          else if (Array.isArray(data.items)) data = data.items;
+          else if (Array.isArray(data.results)) data = data.results;
+          else if (data.campaign || data.ad_sets) data = [data];
+          else {
+            const found = Object.values(data).find(v => Array.isArray(v));
+            if (found) data = found;
+            else throw new Error(`Formato inesperado. Veja o console (F12) para o JSON bruto.`);
+          }
+        }
+
+        if (data.length > 0 && data[0].json && !data[0].ad_sets) {
+          data = data.map(i => i.json);
+        }
+
+        renderKPIs(data);
+        renderTable(data);
+
+        const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('lastUpdated').textContent = `Atualizado às ${now}`;
+        sub.textContent = `${data.length} conjunto${data.length !== 1 ? 's' : ''} carregado${data.length !== 1 ? 's' : ''}.`;
+        badge.textContent = 'OK';
+        badge.className = 'badge-status bs-ok';
+
+      } catch (err) {
+        document.getElementById('tableArea').innerHTML = `
+          <div class="state-box">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p>Erro ao buscar dados.</p>
+            <small>${err.message}</small>
+          </div>
+        `;
+
+        document.getElementById('kpisArea').innerHTML = `
+          <div class="card kpi"><div class="l">Receita total</div><div class="v">—</div></div>
+          <div class="card kpi"><div class="l">Investimento total</div><div class="v">—</div></div>
+          <div class="card kpi"><div class="l">CPL médio</div><div class="v">—</div></div>
+          <div class="card kpi"><div class="l">Conjuntos ativos</div><div class="v">—</div></div>
+        `;
+
+        badge.textContent = 'Erro';
+        badge.className = 'badge-status bs-err';
+        sub.textContent = 'Falha ao carregar dados.';
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+      }
+    }
+
+    // ── Date range logic ─────────────────────────────────────────────────
+    function toLocalISO(date) {
+      // Returns YYYY-MM-DD in local timezone
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function applyPreset(days) {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - days);
+      document.getElementById('startDate').value = toLocalISO(start);
+      document.getElementById('endDate').value = toLocalISO(end);
+      updateRangeLabel();
+    }
+
+    function updateRangeLabel() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+      const lbl = document.getElementById('dateRangeLabel');
+      if (!start || !end) { lbl.innerHTML = ''; return; }
+
+      const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+      const diffDays = Math.round((new Date(end) - new Date(start)) / 86400000) + 1;
+      lbl.innerHTML = `<strong>${fmt(start)}</strong> até <strong>${fmt(end)}</strong> &nbsp;·&nbsp; ${diffDays} dia${diffDays !== 1 ? 's' : ''}`;
+    }
+
+    function syncPresetButtons() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+      if (!start || !end) return;
+
+      const endDate = new Date(end + 'T00:00:00');
+      const startDate = new Date(start + 'T00:00:00');
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((endDate - startDate) / 86400000);
+
+      const presetMap = { 0: 0, 6: 6, 29: 29, 89: 89 };
+
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        const d = parseInt(btn.dataset.days);
+        const expectedStart = new Date(today);
+        expectedStart.setDate(today.getDate() - d);
+        const matches = toLocalISO(expectedStart) === start && toLocalISO(today) === end;
+        btn.classList.toggle('active', matches);
+      });
+    }
+
+    // Trigger fetch when both dates are set
+    function onDateChange() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+      updateRangeLabel();
+      syncPresetButtons();
+      if (start && end && start <= end) {
+        const url = document.getElementById('webhookUrl').value.trim();
+        if (url) fetchData();
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // Restore webhook URL
+      const saved = localStorage.getItem('dolarame_webhook_url');
+      if (saved) document.getElementById('webhookUrl').value = saved;
+
+      // Restore or default dates
+      const savedStart = localStorage.getItem('dolarame_start_date');
+      const savedEnd = localStorage.getItem('dolarame_end_date');
+      if (savedStart && savedEnd) {
+        document.getElementById('startDate').value = savedStart;
+        document.getElementById('endDate').value = savedEnd;
+        updateRangeLabel();
+        syncPresetButtons();
+      } else {
+        applyPreset(29); // default: last 30 days
+      }
+
+      // Preset buttons
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const days = parseInt(btn.dataset.days);
+          applyPreset(days);
+          document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const url = document.getElementById('webhookUrl').value.trim();
+          if (url) fetchData();
+        });
+      });
+
+      // Date inputs
+      document.getElementById('startDate').addEventListener('change', () => {
+        localStorage.setItem('dolarame_start_date', document.getElementById('startDate').value);
+        onDateChange();
+      });
+      document.getElementById('endDate').addEventListener('change', () => {
+        localStorage.setItem('dolarame_end_date', document.getElementById('endDate').value);
+        onDateChange();
+      });
+    });
+
+    document.getElementById('webhookUrl').addEventListener('input', e => {
+      localStorage.setItem('dolarame_webhook_url', e.target.value);
+    });
+  </script>
+</body>
+
+</html>
