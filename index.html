@@ -535,6 +535,65 @@
       color: var(--primary);
       font-weight: 700;
     }
+
+    /* ── Seletor de contas ── */
+    .account-selector {
+      position: relative;
+    }
+
+    .account-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 240px;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      padding: 8px;
+      z-index: 30;
+    }
+
+    .account-dropdown.open {
+      display: block;
+    }
+
+    .account-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .account-dropdown-item:hover {
+      background: var(--primary-soft);
+    }
+
+    .account-dropdown-item label {
+      cursor: pointer;
+      flex: 1;
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .account-dropdown-item input[type="checkbox"] {
+      cursor: pointer;
+      accent-color: var(--primary);
+    }
+
+    .account-dropdown-divider {
+      height: 1px;
+      background: var(--divider);
+      margin: 6px 0;
+    }
   </style>
 </head>
 
@@ -595,6 +654,25 @@
           <span>→</span>
           <input type="date" class="date-input" id="endDate" />
         </div>
+
+        <div class="date-divider"></div>
+
+        <div class="account-selector" id="accountSelector">
+          <button class="preset-btn" type="button" onclick="toggleAccountDropdown()">
+            <span id="accountSelectorLabel">Todas as contas</span> ▾
+          </button>
+          <div class="account-dropdown" id="accountDropdown">
+            <div class="account-dropdown-item">
+              <input type="checkbox" id="accountSelectAll" checked onchange="onSelectAllToggle(this)" />
+              <label for="accountSelectAll"><strong>Selecionar todas</strong></label>
+            </div>
+            <div class="account-dropdown-divider"></div>
+            <div id="accountCheckboxList">
+              <!-- populado dinamicamente após o fetch -->
+            </div>
+          </div>
+        </div>
+
         <span class="date-range-label" id="dateRangeLabel"></span>
       </div>
 
@@ -660,6 +738,98 @@
       if (days === null) return '<strong>—</strong><span class="subt">Sem registro</span>';
       if (days === 0) return '<strong>Hoje</strong><span class="subt">Vendeu hoje</span>';
       return `<strong>${days} dia${days !== 1 ? 's' : ''}</strong><span class="subt">Última venda</span>`;
+    }
+
+    // ── Estado global de dados e filtro de contas ──────────────────────────
+    let rawData = [];
+    let allAccountIds = [];
+    let selectedAccountIds = new Set();
+
+    function accountKey(item) {
+      return (item.account?.id || item.account?.name || 'unknown').toString();
+    }
+
+    function buildAccountOptions(data) {
+      const map = new Map();
+      data.forEach(item => {
+        const key = accountKey(item);
+        if (!map.has(key)) map.set(key, item.account?.name || key);
+      });
+      return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    }
+
+    function initAccountSelector(data) {
+      const options = buildAccountOptions(data);
+      allAccountIds = options.map(o => o.id);
+      selectedAccountIds = new Set(allAccountIds); // começa com todas marcadas
+
+      const list = document.getElementById('accountCheckboxList');
+      list.innerHTML = options.map(opt => `
+        <div class="account-dropdown-item">
+          <input type="checkbox" class="account-checkbox" value="${opt.id}" id="acc-${opt.id}" checked />
+          <label for="acc-${opt.id}">${opt.name}</label>
+        </div>
+      `).join('');
+
+      list.querySelectorAll('.account-checkbox').forEach(cb => {
+        cb.addEventListener('change', onAccountCheckboxChange);
+      });
+
+      document.getElementById('accountSelectAll').checked = true;
+      updateAccountSelectorLabel(options);
+    }
+
+    function onAccountCheckboxChange() {
+      selectedAccountIds = new Set(
+        Array.from(document.querySelectorAll('.account-checkbox:checked')).map(cb => cb.value)
+      );
+      document.getElementById('accountSelectAll').checked = selectedAccountIds.size === allAccountIds.length;
+      updateAccountSelectorLabel(buildAccountOptions(rawData));
+      applyFiltersAndRender();
+    }
+
+    function onSelectAllToggle(checkbox) {
+      document.querySelectorAll('.account-checkbox').forEach(cb => { cb.checked = checkbox.checked; });
+      selectedAccountIds = checkbox.checked ? new Set(allAccountIds) : new Set();
+      updateAccountSelectorLabel(buildAccountOptions(rawData));
+      applyFiltersAndRender();
+    }
+
+    function updateAccountSelectorLabel(options) {
+      const label = document.getElementById('accountSelectorLabel');
+      if (selectedAccountIds.size === 0) {
+        label.textContent = 'Nenhuma conta';
+      } else if (selectedAccountIds.size === allAccountIds.length) {
+        label.textContent = 'Todas as contas';
+      } else if (selectedAccountIds.size === 1) {
+        const id = Array.from(selectedAccountIds)[0];
+        const opt = options.find(o => o.id === id);
+        label.textContent = opt ? opt.name : '1 conta';
+      } else {
+        label.textContent = `${selectedAccountIds.size} contas selecionadas`;
+      }
+    }
+
+    function toggleAccountDropdown() {
+      document.getElementById('accountDropdown').classList.toggle('open');
+    }
+
+    function closeAccountDropdown() {
+      document.getElementById('accountDropdown').classList.remove('open');
+    }
+
+    function getFilteredData() {
+      if (allAccountIds.length === 0) return rawData;
+      return rawData.filter(item => selectedAccountIds.has(accountKey(item)));
+    }
+
+    function applyFiltersAndRender() {
+      const filtered = getFilteredData();
+      renderKPIs(filtered);
+      renderTable(filtered);
+
+      document.getElementById('subtitle').textContent =
+        `${filtered.length} conjunto${filtered.length !== 1 ? 's' : ''} exibido${filtered.length !== 1 ? 's' : ''} de ${rawData.length} carregado${rawData.length !== 1 ? 's' : ''}.`;
     }
 
     // ── Status do criativo: dot + classe de cor no texto ─────────────────
@@ -891,12 +1061,12 @@
           data = data.map(i => i.json);
         }
 
-        renderKPIs(data);
-        renderTable(data);
+        rawData = data;
+        initAccountSelector(rawData);
+        applyFiltersAndRender();
 
         const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         document.getElementById('lastUpdated').textContent = `Atualizado às ${now}`;
-        sub.textContent = `${data.length} conjunto${data.length !== 1 ? 's' : ''} carregado${data.length !== 1 ? 's' : ''}.`;
         badge.textContent = 'OK';
         badge.className = 'badge-status bs-ok';
 
@@ -999,6 +1169,13 @@
         if (url) fetchData();
       }
     }
+
+    document.addEventListener('click', (e) => {
+      const selector = document.getElementById('accountSelector');
+      if (selector && !selector.contains(e.target)) {
+        closeAccountDropdown();
+      }
+    });
 
     window.addEventListener('DOMContentLoaded', () => {
       // Restore webhook URL
