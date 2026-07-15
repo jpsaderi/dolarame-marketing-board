@@ -1,10 +1,13 @@
 (function () {
-  const isGastosPage = window.location.pathname.includes('/gastos/');
-  const currentPage = isGastosPage ? 'gastos' : 'overview';
+  const pathname = window.location.pathname;
+  const isGastosPage = pathname.includes('/gastos/');
+  const isAndamentoPage = pathname.includes('/andamento/');
+  const currentPage = isGastosPage ? 'gastos' : isAndamentoPage ? 'andamento' : 'overview';
 
   const menuItems = [
-    { id: 'overview', label: 'Visão geral', href: isGastosPage ? '../index.html' : './index.html' },
-    { id: 'gastos', label: 'Gastos', href: isGastosPage ? './index.html' : './gastos/index.html' },
+    { id: 'overview', label: 'Visão geral', href: isGastosPage ? '../index.html' : isAndamentoPage ? '../index.html' : './index.html' },
+    { id: 'andamento', label: 'Andamento', href: isGastosPage ? '../andamento/index.html' : isAndamentoPage ? './index.html' : './andamento/index.html' },
+    { id: 'gastos', label: 'Gastos', href: isGastosPage ? './index.html' : isAndamentoPage ? '../gastos/index.html' : './gastos/index.html' },
     { id: 'campaigns', label: 'Campanhas', href: '#' },
     { id: 'leads', label: 'Leads', href: '#' },
     { id: 'revenue', label: 'Receita', href: '#' }

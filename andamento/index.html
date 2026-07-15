@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dolarame · Andamento de leads</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'DM Sans', Arial, sans-serif; }
+    h1 { margin: 0; font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -.01em; }
+    .sub { color: var(--muted); margin-top: 4px; font-size: 14px; }
+    .top-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .last-updated { font-size: 12px; color: var(--muted); }
+    .btn-refresh { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; background: var(--primary); color: #fff; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 700; border: none; cursor: pointer; transition: opacity .15s, transform .1s; }
+    .btn-refresh:hover { opacity: .88; }
+    .btn-refresh:active { transform: scale(.97); }
+    .btn-refresh:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-refresh svg { width: 15px; height: 15px; transition: transform .6s ease; }
+    .btn-refresh.loading svg { animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .webhook-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding: 14px 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); }
+    .webhook-bar label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #9a9891; white-space: nowrap; }
+    .webhook-bar input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--divider); font-family: 'DM Sans', monospace; font-size: 13px; color: var(--muted); outline: none; cursor: not-allowed; }
+    .webhook-lock { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .webhook-lock svg { width: 13px; height: 13px; }
+    .badge-status { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+    .bs-ok { background: var(--success-soft); color: var(--success); }
+    .bs-err { background: var(--error-soft); color: var(--error); }
+    .bs-idle { background: rgba(111, 108, 101, .1); color: var(--muted); }
+
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .kpi { padding: 20px; }
+    .kpi .l { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: #9a9891; font-weight: 700; }
+    .kpi .v { font-size: 24px; font-weight: 800; font-family: 'Syne', sans-serif; margin-top: 10px; }
+    .kpi .m { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+    .section-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; margin: 30px 0 12px; display: flex; align-items: center; gap: 8px; }
+    .section-title .n { font-size: 11px; font-weight: 700; color: var(--primary); background: var(--primary-soft); padding: 2px 8px; border-radius: 999px; }
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .chart-card { padding: 18px 18px 10px; }
+    .chart-card .ch-title { font-size: 13px; font-weight: 700; color: var(--text); }
+    .chart-card .ch-sub { font-size: 12px; color: var(--muted); margin-top: 2px; margin-bottom: 10px; }
+    .chart-wrap { position: relative; height: 280px; }
+    .chart-wrap.tall { height: 320px; }
+
+    .funnel-card { padding: 20px 22px; margin-top: 6px; }
+    .funnel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+    .funnel-row { display: grid; grid-template-columns: 170px 1fr 70px; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .funnel-label { font-size: 13px; font-weight: 700; color: var(--text); }
+    .funnel-track { position: relative; height: 12px; border-radius: 999px; background: var(--divider); overflow: hidden; }
+    .funnel-bar { height: 100%; border-radius: 999px; min-width: 6px; }
+    .funnel-value { font-size: 13px; font-weight: 700; color: var(--primary); text-align: right; }
+    .funnel-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+    .state-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 64px 24px; color: var(--muted); text-align: center; }
+    .state-box svg { opacity: .35; }
+    .state-box p { margin: 0; font-size: 15px; }
+    .state-box small { font-size: 13px; opacity: .75; }
+    .spinner-ring { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
+
+    .skel { background: linear-gradient(90deg, #e8e6e1 25%, #f0ede8 50%, #e8e6e1 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 6px; height: 1em; }
+    .skel-v { height: 1.6em; width: 70%; margin-top: 10px; }
+    .skel-m { height: .9em; width: 90%; margin-top: 8px; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    @media (max-width: 980px) { .dash { grid-template-columns: 1fr; } .side { display: none; } .kpis { grid-template-columns: repeat(2, 1fr); } .charts-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="dash">
+    <aside class="side">
+      <div class="logo">
+        <img src="https://www.dolarame.com.br/wp-content/uploads/2022/11/dolarame_logo_verde-claro_verde-escuro.png" alt="Dolarame" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+        <span style="display:none; font-family:'Syne',sans-serif; font-size:18px; font-weight:800; color:var(--primary);">Dolarame</span>
+      </div>
+      <div data-shared-nav></div>
+    </aside>
+
+    <main class="main">
+      <div class="top">
+        <div>
+          <h1>Andamento de leads</h1>
+          <div class="sub" id="subtitle">Clique em Atualizar para buscar os dados do webhook.</div>
+        </div>
+        <div class="top-actions">
+          <span class="last-updated" id="lastUpdated"></span>
+          <button class="btn-refresh" id="btnRefresh" onclick="fetchData()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 4v6h-6" />
+              <path d="M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            Atualizar
+          </button>
+        </div>
+      </div>
+
+      <div class="webhook-bar">
+        <label>Webhook N8N</label>
+        <input type="text" id="webhookUrl" readonly />
+        <span class="webhook-lock">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="10" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          fixo
+        </span>
+        <span class="badge-status bs-idle" id="statusBadge">Aguardando</span>
+      </div>
+
+      <div class="kpis" id="kpisArea">
+        <div class="card kpi"><div class="l">Captados</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi"><div class="l">Com WhatsApp</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi"><div class="l">Reuniões agendadas</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi"><div class="l">Vendas</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+      </div>
+
+      <div id="contentArea">
+        <div class="card">
+          <div class="state-box">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M3 3h18v18H3z" rx="2" />
+              <path d="M3 9h18M9 21V9" />
+            </svg>
+            <p>Nenhum dado carregado.</p>
+            <small>Clique em Atualizar para buscar os dados do webhook.</small>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../shared-menu.js"></script>
+  <script>
+    const STATIC_WEBHOOK_URL = 'https://dolarame-n8n.up.railway.app/webhook/progress-insights';
+    const brl = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const int = v => Number(v || 0).toLocaleString('pt-BR');
+    const PALETTE = ['#01696f', '#a85600', '#437a22', '#a13544', '#5b4b8a', '#2f7a7a', '#7a3b2e', '#556b2f', '#8a4b6f', '#3a6ea5'];
+    const withAlpha = (hex, a) => { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `rgba(${r},${g},${b},${a})`; };
+
+    let chartInstances = {};
+    let rawPayloads = [];
+
+    function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
+
+    const CHART_CDN_URLS = [
+      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
+      'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
+      'https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js'
+    ];
+    let chartLoadPromise = null;
+    function loadScriptOnce(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Falha ao carregar ' + src));
+        document.head.appendChild(s);
+      });
+    }
+    async function ensureChartLoaded() {
+      if (window.Chart) return;
+      if (chartLoadPromise) return chartLoadPromise;
+      chartLoadPromise = (async () => {
+        let lastErr = null;
+        for (const url of CHART_CDN_URLS) {
+          try { await loadScriptOnce(url); if (window.Chart) return; } catch (e) { lastErr = e; }
+        }
+        throw new Error('Não foi possível carregar o Chart.js. ' + (lastErr ? lastErr.message : ''));
+      })();
+      return chartLoadPromise;
+    }
+
+    function normalizePayloads(raw) {
+      let arr = Array.isArray(raw) ? raw : [raw];
+      arr = arr.map(p => (p && p.json) ? p.json : p);
+      const flat = [];
+      arr.forEach(p => {
+        if (!p) return;
+        if (Array.isArray(p.data)) {
+          p.data.forEach(item => flat.push(item));
+        } else {
+          flat.push(p);
+        }
+      });
+      return flat.filter(p => p && p.campaign && p.ad_sets);
+    }
+
+    function aggregateMetrics(payloads) {
+      const totals = { captured: 0, whatsapp: 0, meetingScheduled: 0, meetingDone: 0, sold: 0, converted: 0 };
+      const campaignMap = new Map();
+      const setMap = new Map();
+      const creativeMap = new Map();
+
+      function addValue(map, key, amount) {
+        if (!map.has(key)) map.set(key, { label: key, value: 0 });
+        map.get(key).value += Number(amount || 0);
+      }
+
+      payloads.forEach(item => {
+        const setResume = item.ad_sets?.resume || {};
+        totals.captured += Number(setResume.capturedCount || 0);
+        totals.whatsapp += Number(setResume.hasWhatsappCount || 0);
+        totals.meetingScheduled += Number(setResume.meetingScheduledCount || 0);
+        totals.meetingDone += Number(setResume.meetingDoneCount || 0);
+        totals.sold += Number(setResume.soldCount || 0);
+        totals.converted += Number(setResume.totalConverted || 0);
+
+        addValue(campaignMap, item.campaign?.name || 'Sem campanha', setResume.capturedCount || 0);
+        addValue(setMap, item.ad_sets?.name || 'Sem conjunto', setResume.capturedCount || 0);
+
+        (item.ads || []).forEach(ad => {
+          const adResume = ad.resume || {};
+          addValue(creativeMap, ad.name || 'Sem criativo', adResume.capturedCount || 0);
+        });
+      });
+
+      return {
+        totals,
+        campaignSeries: Array.from(campaignMap.values()).sort((a, b) => b.value - a.value),
+        setSeries: Array.from(setMap.values()).sort((a, b) => b.value - a.value),
+        creativeSeries: Array.from(creativeMap.values()).sort((a, b) => b.value - a.value)
+      };
+    }
+
+    function renderKPIs(metrics) {
+      document.getElementById('kpisArea').innerHTML = `
+        <div class="card kpi"><div class="l">Captados</div><div class="v">${int(metrics.totals.captured)}</div><div class="m">captações registradas</div></div>
+        <div class="card kpi"><div class="l">Com WhatsApp</div><div class="v">${int(metrics.totals.whatsapp)}</div><div class="m">contatos com WhatsApp</div></div>
+        <div class="card kpi"><div class="l">Reuniões agendadas</div><div class="v">${int(metrics.totals.meetingScheduled)}</div><div class="m">reuniões marcadas</div></div>
+        <div class="card kpi"><div class="l">Vendas</div><div class="v">${int(metrics.totals.sold || metrics.totals.converted)}</div><div class="m">conversões fechadas</div></div>
+      `;
+    }
+
+    function renderFunnel(metrics) {
+      const stages = [
+        { label: 'Captados', count: metrics.totals.captured, color: '#01696f' },
+        { label: 'Com WhatsApp', count: metrics.totals.whatsapp, color: '#0f8c91' },
+        { label: 'Reunião marcada', count: metrics.totals.meetingScheduled, color: '#a85600' },
+        { label: 'Reunião concluída', count: metrics.totals.meetingDone, color: '#5b4b8a' },
+        { label: 'Vendas', count: metrics.totals.sold || metrics.totals.converted, color: '#437a22' }
+      ];
+      const first = Math.max(stages[0].count || 1, 1);
+      document.getElementById('contentArea').innerHTML = `
+        <div class="card funnel-card">
+          <div class="funnel-header">
+            <div>
+              <div class="ch-title">Funil horizontal do progresso dos leads</div>
+              <div class="ch-sub">Visualização da evolução das captações ao longo do processo.</div>
+            </div>
+            <div class="badge-status bs-ok">${int(metrics.totals.captured)} captados</div>
+          </div>
+          ${stages.map(stage => {
+            const pct = stage.count > 0 ? Math.max(8, (stage.count / first) * 100) : 0;
+            const share = first > 0 ? Math.round((stage.count / first) * 100) : 0;
+            return `<div class="funnel-row">
+              <div class="funnel-label">${stage.label}</div>
+              <div class="funnel-track">
+                <div class="funnel-bar" style="width:${pct}%; background:${stage.color};"></div>
+              </div>
+              <div class="funnel-value">${int(stage.count)} · ${share}%</div>
+            </div>`;
+          }).join('')}
+          <div class="funnel-note">A largura do bloco representa a relação com o total inicial de captações.</div>
+        </div>
+      `;
+    }
+
+    function buildBarChart(canvasId, items, label, color) {
+      destroyChart(canvasId);
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      chartInstances[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: items.map(it => it.label),
+          datasets: [{
+            label,
+            data: items.map(it => Number(it.value || 0)),
+            backgroundColor: withAlpha(color, .55),
+            borderColor: color,
+            borderWidth: 1.5,
+            borderRadius: 6,
+            maxBarThickness: 42
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#28251d',
+              padding: 10,
+              callbacks: { label: item => `${label}: ${int(item.raw)}` }
+            }
+          },
+          scales: {
+            y: { beginAtZero: true, ticks: { callback: v => int(v), font: { family: 'DM Sans', size: 11 } }, grid: { color: '#dcd9d5' } },
+            x: { ticks: { font: { family: 'DM Sans', size: 11 } }, grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    function renderCharts(metrics) {
+      document.getElementById('contentArea').innerHTML += `
+        <div class="section-title"><span class="n">1</span> Captação por campanha e conjunto</div>
+        <div class="charts-row">
+          <div class="card chart-card">
+            <div class="ch-title">Captação por campanha</div>
+            <div class="ch-sub">Total de captações por campanha</div>
+            <div class="chart-wrap"><canvas id="campaignChart"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <div class="ch-title">Captação por conjunto</div>
+            <div class="ch-sub">Total de captações por conjunto de anúncios</div>
+            <div class="chart-wrap"><canvas id="setChart"></canvas></div>
+          </div>
+        </div>
+        <div class="section-title"><span class="n">2</span> Captação por criativo</div>
+        <div class="card chart-card">
+          <div class="ch-title">Captação por criativo</div>
+          <div class="ch-sub">Captações por anúncio/criativo</div>
+          <div class="chart-wrap"><canvas id="creativeChart"></canvas></div>
+        </div>
+      `;
+
+      const campaignItems = metrics.campaignSeries.slice(0, 10);
+      const setItems = metrics.setSeries.slice(0, 10);
+      const creativeItems = metrics.creativeSeries.slice(0, 10);
+
+      buildBarChart('campaignChart', campaignItems, 'Captações', '#01696f');
+      buildBarChart('setChart', setItems, 'Captações', '#a85600');
+      buildBarChart('creativeChart', creativeItems, 'Captações', '#5b4b8a');
+    }
+
+    async function fetchData() {
+      const btn = document.getElementById('btnRefresh');
+      const badge = document.getElementById('statusBadge');
+      const sub = document.getElementById('subtitle');
+
+      btn.disabled = true;
+      btn.classList.add('loading');
+      badge.textContent = 'Carregando…';
+      badge.className = 'badge-status bs-idle';
+
+      document.getElementById('contentArea').innerHTML = `
+        <div class="card">
+          <div class="state-box">
+            <div class="spinner-ring"></div>
+            <p>Buscando dados no webhook…</p>
+            <small>Isso pode levar alguns segundos.</small>
+          </div>
+        </div>
+      `;
+      document.getElementById('kpisArea').innerHTML = `
+        <div class="card kpi"><div class="l">Captados</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi"><div class="l">Com WhatsApp</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi"><div class="l">Reuniões agendadas</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi"><div class="l">Vendas</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+      `;
+
+      try {
+        await ensureChartLoaded();
+        const res = await fetch(STATIC_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'dolarame-andamento', timestamp: new Date().toISOString() })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const raw = await res.json();
+        rawPayloads = normalizePayloads(raw);
+        if (rawPayloads.length === 0) throw new Error('Resposta sem dados válidos.');
+
+        const metrics = aggregateMetrics(rawPayloads);
+        renderKPIs(metrics);
+        renderFunnel(metrics);
+        renderCharts(metrics);
+
+        const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('lastUpdated').textContent = `Atualizado às ${now}`;
+        badge.textContent = 'OK';
+        badge.className = 'badge-status bs-ok';
+        sub.textContent = `${rawPayloads.length} item${rawPayloads.length !== 1 ? 's' : ''} carregado${rawPayloads.length !== 1 ? 's' : ''} do webhook.`;
+      } catch (err) {
+        document.getElementById('contentArea').innerHTML = `
+          <div class="card">
+            <div class="state-box">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+              <p>Erro ao buscar dados.</p>
+              <small>${err.message}</small>
+            </div>
+          </div>
+        `;
+        document.getElementById('kpisArea').innerHTML = `
+          <div class="card kpi"><div class="l">Captados</div><div class="v">—</div></div>
+          <div class="card kpi"><div class="l">Com WhatsApp</div><div class="v">—</div></div>
+          <div class="card kpi"><div class="l">Reuniões agendadas</div><div class="v">—</div></div>
+          <div class="card kpi"><div class="l">Vendas</div><div class="v">—</div></div>
+        `;
+        badge.textContent = 'Erro';
+        badge.className = 'badge-status bs-err';
+        sub.textContent = 'Falha ao carregar dados.';
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('webhookUrl').value = STATIC_WEBHOOK_URL;
+      fetchData();
+    });
+  </script>
+</body>
+</html>

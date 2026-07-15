@@ -10,6 +10,10 @@
   --primary: #01696f;
   --primary-soft: #e3efee;
   --accent: #0f8c91;
+  --success: #2d7a2d;
+  --success-soft: #e9f7ea;
+  --error: #b23a3a;
+  --error-soft: #fdecec;
   --radius: 18px;
   --shadow: 0 12px 30px rgba(20, 24, 29, 0.07);
 }
