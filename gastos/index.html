@@ -259,6 +259,65 @@
       font-weight: 700;
     }
 
+    /* ── Seletor de contas ── */
+    .account-selector {
+      position: relative;
+    }
+
+    .account-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 240px;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      padding: 8px;
+      z-index: 30;
+    }
+
+    .account-dropdown.open {
+      display: block;
+    }
+
+    .account-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .account-dropdown-item:hover {
+      background: var(--primary-soft);
+    }
+
+    .account-dropdown-item label {
+      cursor: pointer;
+      flex: 1;
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .account-dropdown-item input[type="checkbox"] {
+      cursor: pointer;
+      accent-color: var(--primary);
+    }
+
+    .account-dropdown-divider {
+      height: 1px;
+      background: var(--divider);
+      margin: 6px 0;
+    }
+
     .kpis {
       display: grid;
       grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -544,6 +603,7 @@
           <button class="preset-btn" data-days="6">7 dias</button>
           <button class="preset-btn active" data-days="29">30 dias</button>
           <button class="preset-btn" data-days="89">90 dias</button>
+          <button class="preset-btn" id="btnMonthToDate">Este mês</button>
         </div>
         <div class="date-divider"></div>
         <div class="date-inputs">
@@ -551,6 +611,25 @@
           <span>→</span>
           <input type="date" class="date-input" id="endDate" />
         </div>
+
+        <div class="date-divider"></div>
+
+        <div class="account-selector" id="accountSelector">
+          <button class="preset-btn" type="button" onclick="toggleAccountDropdown()">
+            <span id="accountSelectorLabel">Todas as contas</span> ▾
+          </button>
+          <div class="account-dropdown" id="accountDropdown">
+            <div class="account-dropdown-item">
+              <input type="checkbox" id="accountSelectAll" checked onchange="onSelectAllToggle(this)" />
+              <label for="accountSelectAll"><strong>Selecionar todas</strong></label>
+            </div>
+            <div class="account-dropdown-divider"></div>
+            <div id="accountCheckboxList">
+              <!-- populado dinamicamente após o fetch -->
+            </div>
+          </div>
+        </div>
+
         <span class="date-range-label" id="dateRangeLabel"></span>
       </div>
 
@@ -626,6 +705,167 @@
     }
     function fmtDateFull(iso) {
       return new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', weekday: 'long' });
+    }
+
+    // ── Estado global de payloads e filtro de contas ────────────────────
+    let rawPayloads = [];
+    let allAccountIds = [];
+    let selectedAccountIds = new Set();
+
+    function accountKey(payload) {
+      return (payload.account?.id || payload.account?.name || 'default').toString();
+    }
+
+    function buildAccountOptions(payloads) {
+      const map = new Map();
+      payloads.forEach(p => {
+        const key = accountKey(p);
+        if (!map.has(key)) map.set(key, p.account?.name || 'Conta padrão');
+      });
+      return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    }
+
+    function initAccountSelector(payloads) {
+      const options = buildAccountOptions(payloads);
+      allAccountIds = options.map(o => o.id);
+      selectedAccountIds = new Set(allAccountIds); // começa com todas marcadas
+
+      const list = document.getElementById('accountCheckboxList');
+      list.innerHTML = options.map(opt => `
+        <div class="account-dropdown-item">
+          <input type="checkbox" class="account-checkbox" value="${opt.id}" id="acc-${opt.id}" checked />
+          <label for="acc-${opt.id}">${opt.name}</label>
+        </div>
+      `).join('');
+
+      list.querySelectorAll('.account-checkbox').forEach(cb => {
+        cb.addEventListener('change', onAccountCheckboxChange);
+      });
+
+      document.getElementById('accountSelectAll').checked = true;
+      updateAccountSelectorLabel(options);
+    }
+
+    function onAccountCheckboxChange() {
+      selectedAccountIds = new Set(
+        Array.from(document.querySelectorAll('.account-checkbox:checked')).map(cb => cb.value)
+      );
+      document.getElementById('accountSelectAll').checked = selectedAccountIds.size === allAccountIds.length;
+      updateAccountSelectorLabel(buildAccountOptions(rawPayloads));
+      applyFiltersAndRender();
+    }
+
+    function onSelectAllToggle(checkbox) {
+      document.querySelectorAll('.account-checkbox').forEach(cb => { cb.checked = checkbox.checked; });
+      selectedAccountIds = checkbox.checked ? new Set(allAccountIds) : new Set();
+      updateAccountSelectorLabel(buildAccountOptions(rawPayloads));
+      applyFiltersAndRender();
+    }
+
+    function updateAccountSelectorLabel(options) {
+      const label = document.getElementById('accountSelectorLabel');
+      if (selectedAccountIds.size === 0) {
+        label.textContent = 'Nenhuma conta';
+      } else if (selectedAccountIds.size === allAccountIds.length) {
+        label.textContent = 'Todas as contas';
+      } else if (selectedAccountIds.size === 1) {
+        const id = Array.from(selectedAccountIds)[0];
+        const opt = options.find(o => o.id === id);
+        label.textContent = opt ? opt.name : '1 conta';
+      } else {
+        label.textContent = `${selectedAccountIds.size} contas selecionadas`;
+      }
+    }
+
+    function toggleAccountDropdown() {
+      document.getElementById('accountDropdown').classList.toggle('open');
+    }
+
+    function closeAccountDropdown() {
+      document.getElementById('accountDropdown').classList.remove('open');
+    }
+
+    function getFilteredPayloads() {
+      if (allAccountIds.length === 0) return rawPayloads;
+      return rawPayloads.filter(p => selectedAccountIds.has(accountKey(p)));
+    }
+
+    // Normaliza a resposta bruta do webhook em uma lista de payloads
+    // (um por conta de anúncio). Aceita: objeto único, array de objetos,
+    // itens do n8n ({json:{...}}) e wrapper {data:[...]}.
+    function normalizePayloads(raw) {
+      let arr = Array.isArray(raw) ? raw : [raw];
+      arr = arr.map(p => (p && p.json) ? p.json : p);
+
+      const flat = [];
+      arr.forEach(p => {
+        if (!p) return;
+        if (Array.isArray(p.data)) {
+          p.data.forEach(inner => flat.push(inner));
+        } else {
+          flat.push(p);
+        }
+      });
+
+      return flat.filter(p => p && (p.campaigns || p.adSets || p.ads));
+    }
+
+    // Combina os payloads das contas selecionadas em um único payload
+    // agregado, para reaproveitar renderAll() sem alterar sua lógica.
+    function mergePayloads(payloads) {
+      const merged = {
+        campaigns: { totalSpent: 0, budget: 0, listCampaigns: [] },
+        adSets: { totalSpent: 0, budget: 0, listAdSets: [] },
+        ads: { totalSpent: 0, listAds: [] },
+        aggregateDailySpend: []
+      };
+
+      const dailyMap = new Map();
+
+      payloads.forEach(p => {
+        merged.campaigns.totalSpent += Number(p.campaigns?.totalSpent || 0);
+        merged.campaigns.budget += Number(p.campaigns?.budget || 0);
+        merged.campaigns.listCampaigns.push(...(p.campaigns?.listCampaigns || []));
+
+        merged.adSets.totalSpent += Number(p.adSets?.totalSpent || 0);
+        merged.adSets.budget += Number(p.adSets?.budget || 0);
+        merged.adSets.listAdSets.push(...(p.adSets?.listAdSets || []));
+
+        merged.ads.totalSpent += Number(p.ads?.totalSpent || 0);
+        merged.ads.listAds.push(...(p.ads?.listAds || []));
+
+        (p.aggregateDailySpend || []).forEach(d => {
+          const cur = dailyMap.get(d.date) || { date: d.date, campaignsTotalSpent: 0, adSetsTotalSpent: 0, adsTotalSpent: 0 };
+          cur.campaignsTotalSpent += Number(d.campaignsTotalSpent || 0);
+          cur.adSetsTotalSpent += Number(d.adSetsTotalSpent || 0);
+          cur.adsTotalSpent += Number(d.adsTotalSpent || 0);
+          dailyMap.set(d.date, cur);
+        });
+      });
+
+      merged.aggregateDailySpend = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+      merged.campaigns.totalSpent = Math.round(merged.campaigns.totalSpent * 100) / 100;
+      merged.adSets.totalSpent = Math.round(merged.adSets.totalSpent * 100) / 100;
+      merged.ads.totalSpent = Math.round(merged.ads.totalSpent * 100) / 100;
+      merged.campaigns.budget = Math.round(merged.campaigns.budget * 100) / 100;
+      merged.adSets.budget = Math.round(merged.adSets.budget * 100) / 100;
+
+      return merged;
+    }
+
+    function applyFiltersAndRender() {
+      const filtered = getFilteredPayloads();
+      const merged = mergePayloads(filtered);
+      renderAll(merged);
+
+      const nCamp = merged.campaigns.listCampaigns.length;
+      const nSets = merged.adSets.listAdSets.length;
+      const nAds = merged.ads.listAds.length;
+      const accTxt = allAccountIds.length > 1
+        ? ` · ${filtered.length} de ${rawPayloads.length} conta${rawPayloads.length !== 1 ? 's' : ''}`
+        : '';
+      document.getElementById('subtitle').textContent =
+        `${nCamp} campanha${nCamp !== 1 ? 's' : ''} · ${nSets} conjunto${nSets !== 1 ? 's' : ''} · ${nAds} criativo${nAds !== 1 ? 's' : ''} carregado${nAds !== 1 ? 's' : ''}${accTxt}.`;
     }
 
     // ── Carregamento dinâmico do Chart.js (com fallback entre CDNs) ────
@@ -1077,24 +1317,17 @@
         let raw = await res.json();
         console.log('[Dolarame] Resposta bruta do N8N:', JSON.stringify(raw, null, 2));
 
-        // Normaliza: aceita objeto único, array com 1 objeto, ou wrapper {data:[...]}
-        let payload = raw;
-        if (Array.isArray(payload)) payload = payload[0];
-        if (payload && payload.json) payload = payload.json;
-        if (payload && Array.isArray(payload.data) && payload.data[0]) payload = payload.data[0];
+        rawPayloads = normalizePayloads(raw);
 
-        if (!payload || (!payload.campaigns && !payload.adSets && !payload.ads)) {
+        if (rawPayloads.length === 0) {
           throw new Error('Formato inesperado. Veja o console (F12) para o JSON bruto.');
         }
 
-        renderAll(payload);
+        initAccountSelector(rawPayloads);
+        applyFiltersAndRender();
 
         const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         document.getElementById('lastUpdated').textContent = `Atualizado às ${now}`;
-        const nCamp = (payload.campaigns?.listCampaigns || []).length;
-        const nSets = (payload.adSets?.listAdSets || []).length;
-        const nAds = (payload.ads?.listAds || []).length;
-        sub.textContent = `${nCamp} campanha${nCamp !== 1 ? 's' : ''} · ${nSets} conjunto${nSets !== 1 ? 's' : ''} · ${nAds} criativo${nAds !== 1 ? 's' : ''} carregado${nAds !== 1 ? 's' : ''}.`;
         badge.textContent = 'OK';
         badge.className = 'badge-status bs-ok';
 
@@ -1140,6 +1373,13 @@
       document.getElementById('endDate').value = toLocalISO(end);
       updateRangeLabel();
     }
+    function applyMonthToDate() {
+      const end = new Date();
+      const start = new Date(end.getFullYear(), end.getMonth(), 1); // dia 1 do mês atual
+      document.getElementById('startDate').value = toLocalISO(start);
+      document.getElementById('endDate').value = toLocalISO(end);
+      updateRangeLabel();
+    }
     function updateRangeLabel() {
       const start = document.getElementById('startDate').value;
       const end = document.getElementById('endDate').value;
@@ -1153,16 +1393,24 @@
       const start = document.getElementById('startDate').value;
       const end = document.getElementById('endDate').value;
       if (!start || !end) return;
-      const endDate = new Date(end + 'T00:00:00');
-      const startDate = new Date(start + 'T00:00:00');
       const today = new Date(); today.setHours(0, 0, 0, 0);
-      document.querySelectorAll('.preset-btn').forEach(btn => {
+
+      let anyDaysMatch = false;
+      document.querySelectorAll('.preset-btn[data-days]').forEach(btn => {
         const d = parseInt(btn.dataset.days);
         const expectedStart = new Date(today);
         expectedStart.setDate(today.getDate() - d);
         const matches = toLocalISO(expectedStart) === start && toLocalISO(today) === end;
         btn.classList.toggle('active', matches);
+        if (matches) anyDaysMatch = true;
       });
+
+      const monthBtn = document.getElementById('btnMonthToDate');
+      if (monthBtn) {
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const isMonthToDate = toLocalISO(monthStart) === start && toLocalISO(today) === end;
+        monthBtn.classList.toggle('active', isMonthToDate && !anyDaysMatch);
+      }
     }
     function onDateChange() {
       updateRangeLabel();
@@ -1188,15 +1436,25 @@
         applyPreset(29);
       }
 
-      document.querySelectorAll('.preset-btn').forEach(btn => {
+      document.querySelectorAll('.preset-btn[data-days]').forEach(btn => {
         btn.addEventListener('click', () => {
           const days = parseInt(btn.dataset.days);
           applyPreset(days);
-          document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.preset-btn[data-days], #btnMonthToDate').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           fetchData();
         });
       });
+
+      const monthBtn = document.getElementById('btnMonthToDate');
+      if (monthBtn) {
+        monthBtn.addEventListener('click', () => {
+          applyMonthToDate();
+          document.querySelectorAll('.preset-btn[data-days], #btnMonthToDate').forEach(b => b.classList.remove('active'));
+          monthBtn.classList.add('active');
+          fetchData();
+        });
+      }
 
       document.getElementById('startDate').addEventListener('change', () => {
         localStorage.setItem('dolarame_graf_start_date', document.getElementById('startDate').value);
@@ -1206,6 +1464,14 @@
         localStorage.setItem('dolarame_graf_end_date', document.getElementById('endDate').value);
         onDateChange();
       });
+    });
+
+    // Fecha o dropdown de contas ao clicar fora dele
+    document.addEventListener('click', (e) => {
+      const selector = document.getElementById('accountSelector');
+      if (selector && !selector.contains(e.target)) {
+        closeAccountDropdown();
+      }
     });
   </script>
 </body>
