@@ -1,81 +1,398 @@
 <!DOCTYPE html>
 <html lang="pt-BR" data-theme="light">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dolarame · Andamento de leads</title>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="../shared.css" />
   <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: 'DM Sans', Arial, sans-serif; }
-    h1 { margin: 0; font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -.01em; }
-    .sub { color: var(--muted); margin-top: 4px; font-size: 14px; }
-    .top-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-    .last-updated { font-size: 12px; color: var(--muted); }
-    .btn-refresh { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; background: var(--primary); color: #fff; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 700; border: none; cursor: pointer; transition: opacity .15s, transform .1s; }
-    .btn-refresh:hover { opacity: .88; }
-    .btn-refresh:active { transform: scale(.97); }
-    .btn-refresh:disabled { opacity: .55; cursor: not-allowed; }
-    .btn-refresh svg { width: 15px; height: 15px; transition: transform .6s ease; }
-    .btn-refresh.loading svg { animation: spin .7s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    * {
+      box-sizing: border-box;
+    }
 
-    .webhook-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding: 14px 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); }
-    .webhook-bar label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #9a9891; white-space: nowrap; }
-    .webhook-bar input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--divider); font-family: 'DM Sans', monospace; font-size: 13px; color: var(--muted); outline: none; cursor: not-allowed; }
-    .webhook-lock { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-    .webhook-lock svg { width: 13px; height: 13px; }
-    .badge-status { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
-    .bs-ok { background: var(--success-soft); color: var(--success); }
-    .bs-err { background: var(--error-soft); color: var(--error); }
-    .bs-idle { background: rgba(111, 108, 101, .1); color: var(--muted); }
+    body {
+      margin: 0;
+      font-family: 'DM Sans', Arial, sans-serif;
+    }
 
-    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
-    .card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
-    .kpi { padding: 20px; }
-    .kpi .l { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: #9a9891; font-weight: 700; }
-    .kpi .v { font-size: 24px; font-weight: 800; font-family: 'Syne', sans-serif; margin-top: 10px; }
-    .kpi .m { font-size: 13px; color: var(--muted); margin-top: 6px; }
+    h1 {
+      margin: 0;
+      font-family: 'Syne', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -.01em;
+    }
 
-    .section-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; margin: 30px 0 12px; display: flex; align-items: center; gap: 8px; }
-    .section-title .n { font-size: 11px; font-weight: 700; color: var(--primary); background: var(--primary-soft); padding: 2px 8px; border-radius: 999px; }
-    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-    .chart-card { padding: 18px 18px 10px; }
-    .chart-card .ch-title { font-size: 13px; font-weight: 700; color: var(--text); }
-    .chart-card .ch-sub { font-size: 12px; color: var(--muted); margin-top: 2px; margin-bottom: 10px; }
-    .chart-wrap { position: relative; height: 280px; }
-    .chart-wrap.tall { height: 320px; }
+    .sub {
+      color: var(--muted);
+      margin-top: 4px;
+      font-size: 14px;
+    }
 
-    .funnel-card { padding: 20px 22px; margin-top: 6px; }
-    .funnel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
-    .funnel-row { display: grid; grid-template-columns: 170px 1fr 70px; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .funnel-label { font-size: 13px; font-weight: 700; color: var(--text); }
-    .funnel-track { position: relative; height: 12px; border-radius: 999px; background: var(--divider); overflow: hidden; }
-    .funnel-bar { height: 100%; border-radius: 999px; min-width: 6px; }
-    .funnel-value { font-size: 13px; font-weight: 700; color: var(--primary); text-align: right; }
-    .funnel-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
 
-    .state-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 64px 24px; color: var(--muted); text-align: center; }
-    .state-box svg { opacity: .35; }
-    .state-box p { margin: 0; font-size: 15px; }
-    .state-box small { font-size: 13px; opacity: .75; }
-    .spinner-ring { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
+    .last-updated {
+      font-size: 12px;
+      color: var(--muted);
+    }
 
-    .skel { background: linear-gradient(90deg, #e8e6e1 25%, #f0ede8 50%, #e8e6e1 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 6px; height: 1em; }
-    .skel-v { height: 1.6em; width: 70%; margin-top: 10px; }
-    .skel-m { height: .9em; width: 90%; margin-top: 8px; }
-    @keyframes shimmer { to { background-position: -200% 0; } }
+    .btn-refresh {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      background: var(--primary);
+      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
 
-    @media (max-width: 980px) { .dash { grid-template-columns: 1fr; } .side { display: none; } .kpis { grid-template-columns: repeat(2, 1fr); } .charts-row { grid-template-columns: 1fr; } }
+    .btn-refresh:hover {
+      opacity: .88;
+    }
+
+    .btn-refresh:active {
+      transform: scale(.97);
+    }
+
+    .btn-refresh:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .btn-refresh svg {
+      width: 15px;
+      height: 15px;
+      transition: transform .6s ease;
+    }
+
+    .btn-refresh.loading svg {
+      animation: spin .7s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .webhook-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .webhook-bar label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #9a9891;
+      white-space: nowrap;
+    }
+
+    .webhook-bar input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--divider);
+      font-family: 'DM Sans', monospace;
+      font-size: 13px;
+      color: var(--muted);
+      outline: none;
+      cursor: not-allowed;
+    }
+
+    .webhook-lock {
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .webhook-lock svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    .badge-status {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .bs-ok {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    .bs-err {
+      background: var(--error-soft);
+      color: var(--error);
+    }
+
+    .bs-idle {
+      background: rgba(111, 108, 101, .1);
+      color: var(--muted);
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .kpi {
+      padding: 20px;
+    }
+
+    .kpi .l {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: #9a9891;
+      font-weight: 700;
+    }
+
+    .kpi .v {
+      font-size: 24px;
+      font-weight: 800;
+      font-family: 'Syne', sans-serif;
+      margin-top: 10px;
+    }
+
+    .kpi .m {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .section-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 800;
+      margin: 30px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title .n {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      background: var(--primary-soft);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .chart-card {
+      padding: 18px 18px 10px;
+    }
+
+    .chart-card .ch-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .chart-card .ch-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      margin-bottom: 10px;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 280px;
+    }
+
+    .chart-wrap.tall {
+      height: 320px;
+    }
+
+    .funnel-card {
+      padding: 20px 22px;
+      margin-top: 6px;
+    }
+
+    .funnel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .funnel-row {
+      display: grid;
+      grid-template-columns: 170px 1fr 70px;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .funnel-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .funnel-track {
+      position: relative;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--divider);
+      overflow: hidden;
+    }
+
+    .funnel-bar {
+      height: 100%;
+      border-radius: 999px;
+      min-width: 6px;
+    }
+
+    .funnel-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary);
+      text-align: right;
+    }
+
+    .funnel-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .state-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 64px 24px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .state-box svg {
+      opacity: .35;
+    }
+
+    .state-box p {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .state-box small {
+      font-size: 13px;
+      opacity: .75;
+    }
+
+    .spinner-ring {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    .skel {
+      background: linear-gradient(90deg, #e8e6e1 25%, #f0ede8 50%, #e8e6e1 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+      height: 1em;
+    }
+
+    .skel-v {
+      height: 1.6em;
+      width: 70%;
+      margin-top: 10px;
+    }
+
+    .skel-m {
+      height: .9em;
+      width: 90%;
+      margin-top: 8px;
+    }
+
+    @keyframes shimmer {
+      to {
+        background-position: -200% 0;
+      }
+    }
+
+    @media (max-width: 980px) {
+      .dash {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        display: none;
+      }
+
+      .kpis {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .charts-row {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
+
 <body>
   <div class="dash">
     <aside class="side">
       <div class="logo">
-        <img src="https://www.dolarame.com.br/wp-content/uploads/2022/11/dolarame_logo_verde-claro_verde-escuro.png" alt="Dolarame" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-        <span style="display:none; font-family:'Syne',sans-serif; font-size:18px; font-weight:800; color:var(--primary);">Dolarame</span>
+        <img src="https://www.dolarame.com.br/wp-content/uploads/2022/11/dolarame_logo_verde-claro_verde-escuro.png"
+          alt="Dolarame" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+        <span
+          style="display:none; font-family:'Syne',sans-serif; font-size:18px; font-weight:800; color:var(--primary);">Dolarame</span>
       </div>
       <div data-shared-nav></div>
     </aside>
@@ -89,7 +406,8 @@
         <div class="top-actions">
           <span class="last-updated" id="lastUpdated"></span>
           <button class="btn-refresh" id="btnRefresh" onclick="fetchData()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+              stroke-linejoin="round">
               <path d="M23 4v6h-6" />
               <path d="M1 20v-6h6" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
@@ -113,10 +431,26 @@
       </div>
 
       <div class="kpis" id="kpisArea">
-        <div class="card kpi"><div class="l">Captados</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
-        <div class="card kpi"><div class="l">Com WhatsApp</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
-        <div class="card kpi"><div class="l">Reuniões agendadas</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
-        <div class="card kpi"><div class="l">Vendas</div><div class="skel skel-v"></div><div class="skel skel-m"></div></div>
+        <div class="card kpi">
+          <div class="l">Captados</div>
+          <div class="skel skel-v"></div>
+          <div class="skel skel-m"></div>
+        </div>
+        <div class="card kpi">
+          <div class="l">Com WhatsApp</div>
+          <div class="skel skel-v"></div>
+          <div class="skel skel-m"></div>
+        </div>
+        <div class="card kpi">
+          <div class="l">Reuniões agendadas</div>
+          <div class="skel skel-v"></div>
+          <div class="skel skel-m"></div>
+        </div>
+        <div class="card kpi">
+          <div class="l">Vendas</div>
+          <div class="skel skel-v"></div>
+          <div class="skel skel-m"></div>
+        </div>
       </div>
 
       <div id="contentArea">
@@ -255,16 +589,16 @@
             <div class="badge-status bs-ok">${int(metrics.totals.captured)} captados</div>
           </div>
           ${stages.map(stage => {
-            const pct = stage.count > 0 ? Math.max(8, (stage.count / first) * 100) : 0;
-            const share = first > 0 ? Math.round((stage.count / first) * 100) : 0;
-            return `<div class="funnel-row">
+        const pct = stage.count > 0 ? Math.max(8, (stage.count / first) * 100) : 0;
+        const share = first > 0 ? Math.round((stage.count / first) * 100) : 0;
+        return `<div class="funnel-row">
               <div class="funnel-label">${stage.label}</div>
               <div class="funnel-track">
                 <div class="funnel-bar" style="width:${pct}%; background:${stage.color};"></div>
               </div>
               <div class="funnel-value">${int(stage.count)} · ${share}%</div>
             </div>`;
-          }).join('')}
+      }).join('')}
           <div class="funnel-note">A largura do bloco representa a relação com o total inicial de captações.</div>
         </div>
       `;
@@ -417,4 +751,5 @@
     });
   </script>
 </body>
+
 </html>
