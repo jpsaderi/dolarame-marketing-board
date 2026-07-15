@@ -963,6 +963,66 @@
       });
     }
 
+    // ── Agrupamento mensal a partir de série diária ─────────────────────
+    function groupByMonth(dates, values) {
+      const map = new Map(); // 'YYYY-MM' -> soma
+      dates.forEach((date, i) => {
+        const monthKey = date.slice(0, 7); // 'YYYY-MM'
+        map.set(monthKey, (map.get(monthKey) || 0) + (values[i] || 0));
+      });
+      const monthKeys = Array.from(map.keys()).sort();
+      const monthValues = monthKeys.map(k => Math.round(map.get(k) * 100) / 100);
+      return { monthKeys, monthValues };
+    }
+
+    function fmtMonthLabel(monthKey) {
+      const [y, m] = monthKey.split('-').map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+    }
+
+    // ── Charts: aggregate total-per-month (bar) ─────────────────────────
+    function buildMonthlyAggChart(canvasId, monthKeys, values, color, unitLabel) {
+      destroyChart(canvasId);
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      chartInstances[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: monthKeys.map(fmtMonthLabel),
+          datasets: [{
+            label: unitLabel,
+            data: values,
+            backgroundColor: withAlpha(color, .55),
+            borderColor: color,
+            borderWidth: 1.5,
+            borderRadius: 6,
+            maxBarThickness: 56,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#28251d',
+              padding: 10,
+              titleFont: { family: 'DM Sans', weight: '700' },
+              bodyFont: { family: 'DM Sans' },
+              callbacks: {
+                title: (items) => fmtMonthLabel(monthKeys[items[0].dataIndex]),
+                label: (item) => `${unitLabel}: ${brl(item.raw)}`
+              }
+            }
+          },
+          scales: {
+            y: { beginAtZero: true, ticks: { callback: v => brlInt(v), font: { family: 'DM Sans', size: 11 } }, grid: { color: '#dcd9d5' } },
+            x: { ticks: { font: { family: 'DM Sans', size: 11 } }, grid: { display: false } }
+          }
+        }
+      });
+    }
+
     // ── Charts: per-entity daily spend (multi-line) ─────────────────────
     function buildMultiSeriesChart(canvasId, items, nameKey) {
       destroyChart(canvasId);
@@ -1138,18 +1198,20 @@
           <div class="ch-sub">Soma diária de todas as campanhas</div>
           <div class="chart-wrap"><canvas id="totalAggChart"></canvas></div>
         </div>
+        <div class="card chart-card">
+          <div class="ch-title">Total gasto por mês</div>
+          <div class="ch-sub">Soma mensal de todas as campanhas</div>
+          <div class="chart-wrap"><canvas id="totalMonthChart"></canvas></div>
+        </div>
       </div>
-      <div class="section-title"><span class="n">1</span> Campanhas</div>
+
+      <div class="section-title"><span class="n">1</span> Campanhas e conjuntos</div>
       <div class="charts-row">
         <div class="card chart-card">
           <div class="ch-title">Gasto por campanha</div>
           <div class="ch-sub">Evolução diária de cada campanha</div>
           <div class="chart-wrap"><canvas id="campMultiChart"></canvas></div>
         </div>
-      </div>
-
-      <div class="section-title"><span class="n">2</span> Conjuntos de anúncios</div>
-      <div class="charts-row">
         <div class="card chart-card">
           <div class="ch-title">Gasto por conjunto</div>
           <div class="ch-sub">Evolução diária de cada conjunto de anúncios</div>
@@ -1157,16 +1219,14 @@
         </div>
       </div>
 
-      <div class="section-title"><span class="n">3</span> Criativos</div>
-      <div class="charts-row">
-        <div class="card chart-card">
-          <div class="ch-title">Gasto por criativo</div>
-          <div class="ch-sub">Evolução diária de cada criativo</div>
-          <div class="chart-wrap"><canvas id="adMultiChart"></canvas></div>
-        </div>
+      <div class="section-title"><span class="n">2</span> Criativos</div>
+      <div class="card chart-card">
+        <div class="ch-title">Gasto por criativo</div>
+        <div class="ch-sub">Evolução diária de cada criativo</div>
+        <div class="chart-wrap"><canvas id="adMultiChart"></canvas></div>
       </div>
 
-      <div class="section-title"><span class="n">4</span> Tendência de gastos</div>
+      <div class="section-title"><span class="n">3</span> Tendência de gastos</div>
       <div class="card trend-card">
         <div class="trend-top">
           <div>
@@ -1253,6 +1313,9 @@
       });
 
       buildAggregateChart('totalAggChart', aggDates, campAggVals, '#01696f', 'Campanhas');
+
+      const { monthKeys, monthValues } = groupByMonth(aggDates, campAggVals);
+      buildMonthlyAggChart('totalMonthChart', monthKeys, monthValues, '#a85600', 'Campanhas (mensal)');
 
       buildMultiSeriesChart('campMultiChart', campaigns, 'name');
       buildMultiSeriesChart('adsetMultiChart', adSets, 'name');
