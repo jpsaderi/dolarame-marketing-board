@@ -160,6 +160,163 @@
       color: var(--muted);
     }
 
+    .date-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-wrap: wrap;
+    }
+
+    .date-bar label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #9a9891;
+      white-space: nowrap;
+    }
+
+    .date-presets {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      padding: 5px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    .preset-btn.active {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .date-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    .date-inputs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .date-inputs span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .date-input {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s;
+      cursor: pointer;
+    }
+
+    .date-input:focus {
+      border-color: var(--primary);
+    }
+
+    .date-range-label {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      margin-left: auto;
+    }
+
+    .date-range-label strong {
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .account-selector {
+      position: relative;
+    }
+
+    .account-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 240px;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      padding: 8px;
+      z-index: 30;
+    }
+
+    .account-dropdown.open {
+      display: block;
+    }
+
+    .account-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .account-dropdown-item:hover {
+      background: var(--primary-soft);
+    }
+
+    .account-dropdown-item label {
+      cursor: pointer;
+      flex: 1;
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .account-dropdown-item input[type="checkbox"] {
+      cursor: pointer;
+      accent-color: var(--primary);
+    }
+
+    .account-dropdown-divider {
+      height: 1px;
+      background: var(--divider);
+      margin: 6px 0;
+    }
+
     .kpis {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -430,6 +587,38 @@
         <span class="badge-status bs-idle" id="statusBadge">Aguardando</span>
       </div>
 
+      <div class="date-bar">
+        <label>Período</label>
+        <div class="date-presets">
+          <button class="preset-btn" data-days="0">Hoje</button>
+          <button class="preset-btn" data-days="6">7 dias</button>
+          <button class="preset-btn active" data-days="29">30 dias</button>
+          <button class="preset-btn" data-days="89">90 dias</button>
+          <button class="preset-btn" id="btnMonthToDate">Este mês</button>
+        </div>
+        <div class="date-divider"></div>
+        <div class="date-inputs">
+          <input type="date" class="date-input" id="startDate" />
+          <span>→</span>
+          <input type="date" class="date-input" id="endDate" />
+        </div>
+        <div class="date-divider"></div>
+        <div class="account-selector" id="accountSelector">
+          <button class="preset-btn" type="button" onclick="toggleAccountDropdown()">
+            <span id="accountSelectorLabel">Todas as contas</span> ▾
+          </button>
+          <div class="account-dropdown" id="accountDropdown">
+            <div class="account-dropdown-item">
+              <input type="checkbox" id="accountSelectAll" checked onchange="onSelectAllToggle(this)" />
+              <label for="accountSelectAll"><strong>Selecionar todas</strong></label>
+            </div>
+            <div class="account-dropdown-divider"></div>
+            <div id="accountCheckboxList"></div>
+          </div>
+        </div>
+        <span class="date-range-label" id="dateRangeLabel"></span>
+      </div>
+
       <div class="kpis" id="kpisArea">
         <div class="card kpi">
           <div class="l">Captados</div>
@@ -478,8 +667,91 @@
 
     let chartInstances = {};
     let rawPayloads = [];
+    let allAccountIds = [];
+    let selectedAccountIds = new Set();
 
     function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
+
+    function accountKey(item) {
+      return (item.account?.id || item.account?.name || 'default').toString();
+    }
+
+    function buildAccountOptions(payloads) {
+      const map = new Map();
+      payloads.forEach(item => {
+        const key = accountKey(item);
+        if (!map.has(key)) map.set(key, item.account?.name || 'Conta padrão');
+      });
+      return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    }
+
+    function initAccountSelector(payloads) {
+      const options = buildAccountOptions(payloads);
+      allAccountIds = options.map(o => o.id);
+      selectedAccountIds = new Set(allAccountIds);
+
+      const list = document.getElementById('accountCheckboxList');
+      list.innerHTML = options.map(opt => `
+        <div class="account-dropdown-item">
+          <input type="checkbox" class="account-checkbox" value="${opt.id}" id="acc-${opt.id}" checked />
+          <label for="acc-${opt.id}">${opt.name}</label>
+        </div>
+      `).join('');
+
+      list.querySelectorAll('.account-checkbox').forEach(cb => cb.addEventListener('change', onAccountCheckboxChange));
+      document.getElementById('accountSelectAll').checked = true;
+      updateAccountSelectorLabel(options);
+    }
+
+    function onAccountCheckboxChange() {
+      selectedAccountIds = new Set(Array.from(document.querySelectorAll('.account-checkbox:checked')).map(cb => cb.value));
+      document.getElementById('accountSelectAll').checked = selectedAccountIds.size === allAccountIds.length;
+      updateAccountSelectorLabel(buildAccountOptions(rawPayloads));
+      applyFiltersAndRender();
+    }
+
+    function onSelectAllToggle(checkbox) {
+      document.querySelectorAll('.account-checkbox').forEach(cb => { cb.checked = checkbox.checked; });
+      selectedAccountIds = checkbox.checked ? new Set(allAccountIds) : new Set();
+      updateAccountSelectorLabel(buildAccountOptions(rawPayloads));
+      applyFiltersAndRender();
+    }
+
+    function updateAccountSelectorLabel(options) {
+      const label = document.getElementById('accountSelectorLabel');
+      if (selectedAccountIds.size === 0) {
+        label.textContent = 'Nenhuma conta';
+      } else if (selectedAccountIds.size === allAccountIds.length) {
+        label.textContent = 'Todas as contas';
+      } else if (selectedAccountIds.size === 1) {
+        const id = Array.from(selectedAccountIds)[0];
+        const opt = options.find(o => o.id === id);
+        label.textContent = opt ? opt.name : '1 conta';
+      } else {
+        label.textContent = `${selectedAccountIds.size} contas selecionadas`;
+      }
+    }
+
+    function toggleAccountDropdown() {
+      document.getElementById('accountDropdown').classList.toggle('open');
+    }
+
+    function closeAccountDropdown() {
+      document.getElementById('accountDropdown').classList.remove('open');
+    }
+
+    function getFilteredPayloads() {
+      if (allAccountIds.length === 0) return rawPayloads;
+      return rawPayloads.filter(item => selectedAccountIds.has(accountKey(item)));
+    }
+
+    function applyFiltersAndRender() {
+      const filtered = getFilteredPayloads();
+      const metrics = aggregateMetrics(filtered);
+      renderKPIs(metrics);
+      renderFunnel(metrics);
+      renderCharts(metrics);
+    }
 
     const CHART_CDN_URLS = [
       'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
@@ -703,17 +975,20 @@
         const res = await fetch(STATIC_WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source: 'dolarame-andamento', timestamp: new Date().toISOString() })
+          body: JSON.stringify({
+            source: 'dolarame-andamento',
+            timestamp: new Date().toISOString(),
+            startDate: document.getElementById('startDate').value,
+            endDate: document.getElementById('endDate').value
+          })
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const raw = await res.json();
         rawPayloads = normalizePayloads(raw);
         if (rawPayloads.length === 0) throw new Error('Resposta sem dados válidos.');
 
-        const metrics = aggregateMetrics(rawPayloads);
-        renderKPIs(metrics);
-        renderFunnel(metrics);
-        renderCharts(metrics);
+        initAccountSelector(rawPayloads);
+        applyFiltersAndRender();
 
         const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         document.getElementById('lastUpdated').textContent = `Atualizado às ${now}`;
@@ -745,9 +1020,123 @@
       }
     }
 
+    function toLocalISO(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function applyPreset(days) {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - days);
+      document.getElementById('startDate').value = toLocalISO(start);
+      document.getElementById('endDate').value = toLocalISO(end);
+      updateRangeLabel();
+    }
+
+    function applyMonthToDate() {
+      const end = new Date();
+      const start = new Date(end.getFullYear(), end.getMonth(), 1);
+      document.getElementById('startDate').value = toLocalISO(start);
+      document.getElementById('endDate').value = toLocalISO(end);
+      updateRangeLabel();
+    }
+
+    function updateRangeLabel() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+      const lbl = document.getElementById('dateRangeLabel');
+      if (!start || !end) { lbl.innerHTML = ''; return; }
+      const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+      const diffDays = Math.round((new Date(end) - new Date(start)) / 86400000) + 1;
+      lbl.innerHTML = `<strong>${fmt(start)}</strong> até <strong>${fmt(end)}</strong> &nbsp;·&nbsp; ${diffDays} dia${diffDays !== 1 ? 's' : ''}`;
+    }
+
+    function syncPresetButtons() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+      if (!start || !end) return;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+
+      let anyDaysMatch = false;
+      document.querySelectorAll('.preset-btn[data-days]').forEach(btn => {
+        const d = parseInt(btn.dataset.days);
+        const expectedStart = new Date(today);
+        expectedStart.setDate(today.getDate() - d);
+        const matches = toLocalISO(expectedStart) === start && toLocalISO(today) === end;
+        btn.classList.toggle('active', matches);
+        if (matches) anyDaysMatch = true;
+      });
+
+      const monthBtn = document.getElementById('btnMonthToDate');
+      if (monthBtn) {
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const isMonthToDate = toLocalISO(monthStart) === start && toLocalISO(today) === end;
+        monthBtn.classList.toggle('active', isMonthToDate && !anyDaysMatch);
+      }
+    }
+
+    function onDateChange() {
+      updateRangeLabel();
+      syncPresetButtons();
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+      if (start && end && start <= end) fetchData();
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       document.getElementById('webhookUrl').value = STATIC_WEBHOOK_URL;
+
+      const savedStart = localStorage.getItem('dolarame_andamento_start_date');
+      const savedEnd = localStorage.getItem('dolarame_andamento_end_date');
+      if (savedStart && savedEnd) {
+        document.getElementById('startDate').value = savedStart;
+        document.getElementById('endDate').value = savedEnd;
+        updateRangeLabel();
+        syncPresetButtons();
+      } else {
+        applyPreset(29);
+      }
+
+      document.querySelectorAll('.preset-btn[data-days]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const days = parseInt(btn.dataset.days);
+          applyPreset(days);
+          document.querySelectorAll('.preset-btn[data-days], #btnMonthToDate').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          fetchData();
+        });
+      });
+
+      const monthBtn = document.getElementById('btnMonthToDate');
+      if (monthBtn) {
+        monthBtn.addEventListener('click', () => {
+          applyMonthToDate();
+          document.querySelectorAll('.preset-btn[data-days], #btnMonthToDate').forEach(b => b.classList.remove('active'));
+          monthBtn.classList.add('active');
+          fetchData();
+        });
+      }
+
+      document.getElementById('startDate').addEventListener('change', () => {
+        localStorage.setItem('dolarame_andamento_start_date', document.getElementById('startDate').value);
+        onDateChange();
+      });
+      document.getElementById('endDate').addEventListener('change', () => {
+        localStorage.setItem('dolarame_andamento_end_date', document.getElementById('endDate').value);
+        onDateChange();
+      });
+
       fetchData();
+    });
+
+    document.addEventListener('click', (e) => {
+      const selector = document.getElementById('accountSelector');
+      if (selector && !selector.contains(e.target)) {
+        closeAccountDropdown();
+      }
     });
   </script>
 </body>
