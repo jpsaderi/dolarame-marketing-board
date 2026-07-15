@@ -536,7 +536,6 @@
       font-weight: 700;
     }
   </style>
-  </style>
 </head>
 
 <body>
@@ -586,8 +585,9 @@
         <div class="date-presets">
           <button class="preset-btn" data-days="0">Hoje</button>
           <button class="preset-btn" data-days="6">7 dias</button>
-          <button class="preset-btn active" data-days="29">30 dias</button>
+          <button class="preset-btn" data-days="29">30 dias</button>
           <button class="preset-btn" data-days="89">90 dias</button>
+          <button class="preset-btn active" id="btnMonthToDate">Este mês</button>
         </div>
         <div class="date-divider"></div>
         <div class="date-inputs">
@@ -943,6 +943,14 @@
       updateRangeLabel();
     }
 
+    function applyMonthToDate() {
+      const end = new Date();
+      const start = new Date(end.getFullYear(), end.getMonth(), 1); // dia 1 do mês atual
+      document.getElementById('startDate').value = toLocalISO(start);
+      document.getElementById('endDate').value = toLocalISO(end);
+      updateRangeLabel();
+    }
+
     function updateRangeLabel() {
       const start = document.getElementById('startDate').value;
       const end = document.getElementById('endDate').value;
@@ -962,17 +970,22 @@
       const endDate = new Date(end + 'T00:00:00');
       const startDate = new Date(start + 'T00:00:00');
       const today = new Date(); today.setHours(0, 0, 0, 0);
-      const diffDays = Math.round((endDate - startDate) / 86400000);
 
-      const presetMap = { 0: 0, 6: 6, 29: 29, 89: 89 };
+      let anyDaysMatch = false;
 
-      document.querySelectorAll('.preset-btn').forEach(btn => {
+      document.querySelectorAll('.preset-btn[data-days]').forEach(btn => {
         const d = parseInt(btn.dataset.days);
         const expectedStart = new Date(today);
         expectedStart.setDate(today.getDate() - d);
         const matches = toLocalISO(expectedStart) === start && toLocalISO(today) === end;
         btn.classList.toggle('active', matches);
+        if (matches) anyDaysMatch = true;
       });
+
+      // Verifica se corresponde ao "mês atual"
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      const isMonthToDate = toLocalISO(monthStart) === start && toLocalISO(today) === end;
+      document.getElementById('btnMonthToDate').classList.toggle('active', isMonthToDate && !anyDaysMatch);
     }
 
     // Trigger fetch when both dates are set
@@ -1001,11 +1014,11 @@
         updateRangeLabel();
         syncPresetButtons();
       } else {
-        applyPreset(29); // default: last 30 days
+        applyMonthToDate(); // padrão: do dia 1 do mês atual até hoje
       }
 
-      // Preset buttons
-      document.querySelectorAll('.preset-btn').forEach(btn => {
+      // Preset buttons (dias fixos)
+      document.querySelectorAll('.preset-btn[data-days]').forEach(btn => {
         btn.addEventListener('click', () => {
           const days = parseInt(btn.dataset.days);
           applyPreset(days);
@@ -1014,6 +1027,15 @@
           const url = document.getElementById('webhookUrl').value.trim();
           if (url) fetchData();
         });
+      });
+
+      // Botão "Este mês"
+      document.getElementById('btnMonthToDate').addEventListener('click', () => {
+        applyMonthToDate();
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('btnMonthToDate').classList.add('active');
+        const url = document.getElementById('webhookUrl').value.trim();
+        if (url) fetchData();
       });
 
       // Date inputs
