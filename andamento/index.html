@@ -421,72 +421,15 @@
       margin-bottom: 18px;
     }
 
-    .funnel-steps {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 10px;
+    /* ── Diagrama Sankey (ApexSankey) ── */
+    .sankey-container {
+      width: 100%;
+      min-height: 440px;
+      overflow-x: auto;
     }
 
-    .funnel-step {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 12px 10px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 246, 242, 0.96));
-      min-height: 150px;
-    }
-
-    .funnel-step-icon {
-      width: 42px;
-      height: 42px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 50%;
-      background: var(--primary-soft);
-      color: var(--primary);
-      flex-shrink: 0;
-    }
-
-    .funnel-step-icon svg {
-      width: 20px;
-      height: 20px;
-    }
-
-    .funnel-step-label {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text);
-      min-height: 38px;
-    }
-
-    .funnel-track {
-      position: relative;
-      height: 10px;
-      border-radius: 999px;
-      background: var(--divider);
-      overflow: hidden;
-    }
-
-    .funnel-bar {
-      height: 100%;
-      border-radius: 999px;
-      min-width: 6px;
-      transition: width .25s ease;
-    }
-
-    .funnel-step-value {
-      font-size: 14px;
-      font-weight: 800;
-      color: var(--primary);
-    }
-
-    .funnel-step-meta {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: auto;
+    .sankey-container svg {
+      max-width: none;
     }
 
     .funnel-note {
@@ -570,10 +513,6 @@
 
       .charts-row {
         grid-template-columns: 1fr;
-      }
-
-      .funnel-steps {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
   </style>
@@ -706,6 +645,7 @@
     let rawPayloads = [];
     let allAccountIds = [];
     let selectedAccountIds = new Set();
+    let sankeyInstance = null;
 
     function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
 
@@ -740,18 +680,18 @@
       updateAccountSelectorLabel(options);
     }
 
-    function onAccountCheckboxChange() {
+    async function onAccountCheckboxChange() {
       selectedAccountIds = new Set(Array.from(document.querySelectorAll('.account-checkbox:checked')).map(cb => cb.value));
       document.getElementById('accountSelectAll').checked = selectedAccountIds.size === allAccountIds.length;
       updateAccountSelectorLabel(buildAccountOptions(rawPayloads));
-      applyFiltersAndRender();
+      await applyFiltersAndRender();
     }
 
-    function onSelectAllToggle(checkbox) {
+    async function onSelectAllToggle(checkbox) {
       document.querySelectorAll('.account-checkbox').forEach(cb => { cb.checked = checkbox.checked; });
       selectedAccountIds = checkbox.checked ? new Set(allAccountIds) : new Set();
       updateAccountSelectorLabel(buildAccountOptions(rawPayloads));
-      applyFiltersAndRender();
+      await applyFiltersAndRender();
     }
 
     function updateAccountSelectorLabel(options) {
@@ -782,14 +722,60 @@
       return rawPayloads.filter(item => selectedAccountIds.has(accountKey(item)));
     }
 
-    function applyFiltersAndRender() {
+    // Monta o layout completo (card do sankey + linhas de gráficos) em uma
+    // única atribuição de innerHTML, para não destruir o SVG do ApexSankey
+    // que será injetado depois via manipulação direta do DOM.
+    function buildContentLayout(metrics) {
+      document.getElementById('contentArea').innerHTML = `
+        <div class="card funnel-card">
+          <div class="funnel-header">
+            <div>
+              <div class="ch-title">Fluxo de progresso dos leads</div>
+              <div class="ch-sub">Diagrama Sankey mostrando o caminho dos leads: captação → WhatsApp → reunião → compra.</div>
+            </div>
+            <div class="badge-status bs-ok">${int(metrics.totals.captured)} captados</div>
+          </div>
+          <div id="sankeyContainer" class="sankey-container">
+            <div class="state-box">
+              <div class="spinner-ring"></div>
+              <p>Montando o diagrama…</p>
+            </div>
+          </div>
+          <div class="funnel-note">A espessura de cada fluxo representa a quantidade de leads que percorreu aquele caminho.</div>
+        </div>
+
+        <div class="section-title"><span class="n">1</span> Captação por campanha e conjunto</div>
+        <div class="charts-row">
+          <div class="card chart-card">
+            <div class="ch-title">Captação por campanha</div>
+            <div class="ch-sub">Total de captações por campanha</div>
+            <div class="chart-wrap"><canvas id="campaignChart"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <div class="ch-title">Captação por conjunto</div>
+            <div class="ch-sub">Total de captações por conjunto de anúncios</div>
+            <div class="chart-wrap"><canvas id="setChart"></canvas></div>
+          </div>
+        </div>
+        <div class="section-title"><span class="n">2</span> Captação por criativo</div>
+        <div class="card chart-card">
+          <div class="ch-title">Captação por criativo</div>
+          <div class="ch-sub">Captações por anúncio/criativo</div>
+          <div class="chart-wrap"><canvas id="creativeChart"></canvas></div>
+        </div>
+      `;
+    }
+
+    async function applyFiltersAndRender() {
       const filtered = getFilteredPayloads();
       const metrics = aggregateMetrics(filtered);
       renderKPIs(metrics);
-      renderFunnel(metrics);
+      buildContentLayout(metrics);
       renderCharts(metrics);
+      await renderSankey(metrics);
     }
 
+    // ── Carregamento dinâmico do Chart.js (com fallback entre CDNs) ────
     const CHART_CDN_URLS = [
       'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
       'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
@@ -818,6 +804,25 @@
       return chartLoadPromise;
     }
 
+    // ── Carregamento dinâmico do ApexSankey (com fallback entre CDNs) ──
+    const APEXSANKEY_CDN_URLS = [
+      'https://cdn.jsdelivr.net/npm/apexsankey',
+      'https://unpkg.com/apexsankey'
+    ];
+    let apexSankeyLoadPromise = null;
+    async function ensureApexSankeyLoaded() {
+      if (window.ApexSankey) return;
+      if (apexSankeyLoadPromise) return apexSankeyLoadPromise;
+      apexSankeyLoadPromise = (async () => {
+        let lastErr = null;
+        for (const url of APEXSANKEY_CDN_URLS) {
+          try { await loadScriptOnce(url); if (window.ApexSankey) return; } catch (e) { lastErr = e; }
+        }
+        throw new Error('Não foi possível carregar a biblioteca ApexSankey. Verifique se o domínio cdn.jsdelivr.net / unpkg.com não está bloqueado neste ambiente.' + (lastErr ? ' Detalhe: ' + lastErr.message : ''));
+      })();
+      return apexSankeyLoadPromise;
+    }
+
     function normalizePayloads(raw) {
       let arr = Array.isArray(raw) ? raw : [raw];
       arr = arr.map(p => (p && p.json) ? p.json : p);
@@ -834,7 +839,7 @@
     }
 
     function aggregateMetrics(payloads) {
-      const totals = { captured: 0, whatsapp: 0, meetingScheduled: 0, meetingDone: 0, sold: 0, converted: 0 };
+      const totals = { captured: 0, whatsapp: 0, noWhatsapp: 0, meetingScheduled: 0, meetingDone: 0, sold: 0, converted: 0 };
       const campaignMap = new Map();
       const setMap = new Map();
       const creativeMap = new Map();
@@ -848,6 +853,7 @@
         const setResume = item.ad_sets?.resume || {};
         totals.captured += Number(setResume.capturedCount || 0);
         totals.whatsapp += Number(setResume.hasWhatsappCount || 0);
+        totals.noWhatsapp += Number(setResume.noWhatsappCount || 0);
         totals.meetingScheduled += Number(setResume.meetingScheduledCount || 0);
         totals.meetingDone += Number(setResume.meetingDoneCount || 0);
         totals.sold += Number(setResume.soldCount || 0);
@@ -879,44 +885,94 @@
       `;
     }
 
-    function renderFunnel(metrics) {
-      const stages = [
-        { label: 'Captados', count: metrics.totals.captured, color: '#01696f', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 21c-4.4 0-8-3.6-8-8 0-4.4 3.6-8 8-8 4.4 0 8 3.6 8 8 0 4.4-3.6 8-8 8z"/><path d="M12 7v5l3 2"/></svg>', meta: 'entrada' },
-        { label: 'Com WhatsApp', count: metrics.totals.whatsapp, color: '#0f8c91', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1z"/><path d="M8 8h8M8 11h5"/></svg>', meta: 'contato' },
-        { label: 'Reunião agendada', count: metrics.totals.meetingScheduled, color: '#a85600', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 9h18"/><path d="M8 13h2l1 2 3-4h2"/></svg>', meta: 'agenda' },
-        { label: 'Reunião concluída', count: metrics.totals.meetingDone, color: '#5b4b8a', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3l7 4v5c0 4.2-2.8 7.4-7 9-4.2-1.6-7-4.8-7-9V7l7-4z"/><path d="M9.5 12l1.8 1.8 3.2-3.6"/></svg>', meta: 'follow-up' },
-        { label: 'Vendas', count: metrics.totals.sold || metrics.totals.converted, color: '#437a22', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7h18v10H3z"/><path d="M7 11h10"/><path d="M7 15h6"/></svg>', meta: 'fechamento' },
-        { label: 'Conversões', count: metrics.totals.converted || metrics.totals.sold, color: '#a13544', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 12h16"/><path d="M12 4l8 8-8 8"/><path d="M4 12h4"/></svg>', meta: 'registro' }
+    // ── Diagrama Sankey do fluxo de leads ───────────────────────────────
+    // Caminho: Captados → (possui WhatsApp / não possui WhatsApp)
+    //          → Marcou reunião → Reunião realizada → Realizou compra
+    function buildSankeyData(metrics) {
+      const t = metrics.totals;
+
+      const nodes = [
+        { id: 'captados', title: 'Captados', color: '#01696f' },
+        { id: 'com_whatsapp', title: 'Possui WhatsApp', color: '#0f8c91' },
+        { id: 'sem_whatsapp', title: 'Não possui WhatsApp', color: '#a13544' },
+        { id: 'reuniao_agendada', title: 'Marcou reunião', color: '#a85600' },
+        { id: 'reuniao_realizada', title: 'Reunião realizada', color: '#5b4b8a' },
+        { id: 'compra', title: 'Realizou compra', color: '#437a22' }
       ];
-      const first = Math.max(stages[0].count || 1, 1);
-      document.getElementById('contentArea').innerHTML = `
-        <div class="card funnel-card">
-          <div class="funnel-header">
-            <div>
-              <div class="ch-title">Funil horizontal do progresso dos leads</div>
-              <div class="ch-sub">Seis etapas com ícones para acompanhar o avanço das captações.</div>
-            </div>
-            <div class="badge-status bs-ok">${int(metrics.totals.captured)} captados</div>
-          </div>
-          <div class="funnel-steps">
-            ${stages.map(stage => {
-        const pct = stage.count > 0 ? Math.max(10, (stage.count / first) * 100) : 0;
-        return `<div class="funnel-step">
-                <div class="funnel-step-icon" style="background:${withAlpha(stage.color, 0.16)}; color:${stage.color};">${stage.icon}</div>
-                <div class="funnel-step-label">${stage.label}</div>
-                <div class="funnel-track">
-                  <div class="funnel-bar" style="width:${pct}%; background:${stage.color};"></div>
-                </div>
-                <div class="funnel-step-value">${int(stage.count)}</div>
-                <div class="funnel-step-meta">${stage.meta}</div>
-              </div>`;
-      }).join('')}
-          </div>
-          <div class="funnel-note">A largura da barra representa a relação com o total inicial de captações.</div>
-        </div>
-      `;
+
+      const edges = [];
+      const addEdge = (source, target, value) => {
+        if (value > 0) edges.push({ source, target, value });
+      };
+
+      addEdge('captados', 'com_whatsapp', t.whatsapp);
+      addEdge('captados', 'sem_whatsapp', t.noWhatsapp);
+      addEdge('com_whatsapp', 'reuniao_agendada', Math.min(t.meetingScheduled, t.whatsapp || t.meetingScheduled));
+      addEdge('reuniao_agendada', 'reuniao_realizada', Math.min(t.meetingDone, t.meetingScheduled || t.meetingDone));
+      addEdge('reuniao_realizada', 'compra', Math.min(t.sold || t.converted, t.meetingDone || (t.sold || t.converted)));
+
+      const usedIds = new Set();
+      edges.forEach(e => { usedIds.add(e.source); usedIds.add(e.target); });
+
+      return { nodes: nodes.filter(n => usedIds.has(n.id)), edges };
     }
 
+    async function renderSankey(metrics) {
+      const container = document.getElementById('sankeyContainer');
+      if (!container) return;
+
+      const data = buildSankeyData(metrics);
+
+      if (data.edges.length === 0) {
+        container.innerHTML = `
+          <div class="state-box">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h18v18H3z" rx="2" /><path d="M3 9h18M9 21V9" /></svg>
+            <p>Sem dados suficientes para montar o fluxo.</p>
+            <small>Ajuste o período ou as contas selecionadas.</small>
+          </div>`;
+        return;
+      }
+
+      try {
+        await ensureApexSankeyLoaded();
+      } catch (err) {
+        container.innerHTML = `
+          <div class="state-box">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            <p>Não foi possível carregar o diagrama.</p>
+            <small>${err.message}</small>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      const width = Math.max(container.clientWidth || 0, 640);
+
+      try {
+        sankeyInstance = new ApexSankey(container, {
+          width,
+          height: 420,
+          nodeWidth: 18,
+          nodeSpacing: 28,
+          fontFamily: 'DM Sans, sans-serif',
+          fontSize: '12px',
+          fontWeight: 600,
+          tooltipBackgroundColor: '#28251d',
+          tooltipTextColor: '#f7f6f2',
+          canvasStyle: 'background-color: transparent;'
+        });
+        sankeyInstance.render(data);
+      } catch (err) {
+        container.innerHTML = `
+          <div class="state-box">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            <p>Erro ao renderizar o diagrama.</p>
+            <small>${err.message}</small>
+          </div>`;
+      }
+    }
+
+    // ── Gráficos de barra (Chart.js) ────────────────────────────────────
     function buildBarChart(canvasId, items, label, color) {
       destroyChart(canvasId);
       const ctx = document.getElementById(canvasId).getContext('2d');
@@ -937,12 +993,18 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
           plugins: {
             legend: { display: false },
             tooltip: {
               backgroundColor: '#28251d',
               padding: 10,
-              callbacks: { label: item => `${label}: ${int(item.raw)}` }
+              titleFont: { family: 'DM Sans', weight: '700' },
+              bodyFont: { family: 'DM Sans' },
+              callbacks: {
+                title: (ctxItems) => ctxItems[0]?.label || '',
+                label: (item) => `${label}: ${int(item.raw)}`
+              }
             }
           },
           scales: {
@@ -954,35 +1016,23 @@
     }
 
     function renderCharts(metrics) {
-      document.getElementById('contentArea').innerHTML += `
-        <div class="section-title"><span class="n">1</span> Captação por campanha e conjunto</div>
-        <div class="charts-row">
-          <div class="card chart-card">
-            <div class="ch-title">Captação por campanha</div>
-            <div class="ch-sub">Total de captações por campanha</div>
-            <div class="chart-wrap"><canvas id="campaignChart"></canvas></div>
-          </div>
-          <div class="card chart-card">
-            <div class="ch-title">Captação por conjunto</div>
-            <div class="ch-sub">Total de captações por conjunto de anúncios</div>
-            <div class="chart-wrap"><canvas id="setChart"></canvas></div>
-          </div>
-        </div>
-        <div class="section-title"><span class="n">2</span> Captação por criativo</div>
-        <div class="card chart-card">
-          <div class="ch-title">Captação por criativo</div>
-          <div class="ch-sub">Captações por anúncio/criativo</div>
-          <div class="chart-wrap"><canvas id="creativeChart"></canvas></div>
-        </div>
-      `;
-
       const campaignItems = metrics.campaignSeries.slice(0, 10);
       const setItems = metrics.setSeries.slice(0, 10);
       const creativeItems = metrics.creativeSeries.slice(0, 10);
 
-      buildBarChart('campaignChart', campaignItems, 'Captações', '#01696f');
-      buildBarChart('setChart', setItems, 'Captações', '#a85600');
-      buildBarChart('creativeChart', creativeItems, 'Captações', '#5b4b8a');
+      ensureChartLoaded().then(() => {
+        buildBarChart('campaignChart', campaignItems, 'Captações', '#01696f');
+        buildBarChart('setChart', setItems, 'Captações', '#a85600');
+        buildBarChart('creativeChart', creativeItems, 'Captações', '#5b4b8a');
+      }).catch(err => {
+        ['campaignChart', 'setChart', 'creativeChart'].forEach(id => {
+          const canvas = document.getElementById(id);
+          if (canvas) {
+            const wrap = canvas.closest('.chart-wrap');
+            if (wrap) wrap.innerHTML = `<div class="state-box"><p>Erro ao carregar gráfico.</p><small>${err.message}</small></div>`;
+          }
+        });
+      });
     }
 
     async function fetchData() {
@@ -1029,7 +1079,7 @@
         if (rawPayloads.length === 0) throw new Error('Resposta sem dados válidos.');
 
         initAccountSelector(rawPayloads);
-        applyFiltersAndRender();
+        await applyFiltersAndRender();
 
         const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         document.getElementById('lastUpdated').textContent = `Atualizado às ${now}`;
