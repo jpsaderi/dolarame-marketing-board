@@ -731,7 +731,7 @@
           <div class="funnel-header">
             <div>
               <div class="ch-title">Fluxo de progresso dos leads</div>
-              <div class="ch-sub">Diagrama Sankey (Apache ECharts): captação → WhatsApp válido / inválido / social seller → reunião → compra.</div>
+              <div class="ch-sub">Diagrama Sankey (Apache ECharts): captação → WhatsApp válido / inválido / social seller → reunião → compra. Somente o WhatsApp válido segue para reunião.</div>
             </div>
             <div class="badge-status bs-ok">${int(metrics.totals.captured)} captados</div>
           </div>
@@ -895,7 +895,7 @@
       'Captados': '#01696f',
       'WhatsApp válido': '#0f8c91',
       'WhatsApp inválido': '#a13544',
-      'Em contato com social seller': '#9b6c00',
+      'Contato com o Social Seller': '#9b6c00',
       'Marcou reunião': '#a85600',
       'Reunião realizada': '#5b4b8a',
       'Realizou compra': '#437a22'
@@ -912,20 +912,13 @@
 
       // Captação se divide em 3 caminhos possíveis
       addEdge('Captados', 'WhatsApp válido', t.whatsapp);
+      addEdge('Captados', 'Contato com o Social Seller', t.socialSeller);
       addEdge('Captados', 'WhatsApp inválido', t.noWhatsapp);
-      addEdge('Captados', 'Em contato com social seller', t.socialSeller);
 
-      // Reuniões agendadas: distribuídas proporcionalmente entre os leads
-      // com WhatsApp válido e os leads em contato com social seller
-      // (WhatsApp inválido não segue para a etapa de reunião).
-      const meetingPool = t.whatsapp + t.socialSeller;
-      if (meetingPool > 0 && t.meetingScheduled > 0) {
-        const fromWhatsapp = Math.round(t.meetingScheduled * (t.whatsapp / meetingPool));
-        const fromSocialSeller = t.meetingScheduled - fromWhatsapp;
-        addEdge('WhatsApp válido', 'Marcou reunião', fromWhatsapp);
-        addEdge('Em contato com social seller', 'Marcou reunião', fromSocialSeller);
-      }
-
+      // Apenas o WhatsApp válido segue para a etapa de reunião.
+      // "Contato com o Social Seller" e "WhatsApp inválido" são ramos
+      // terminais (ficam próximos do começo do gráfico).
+      addEdge('WhatsApp válido', 'Marcou reunião', Math.min(t.meetingScheduled, t.whatsapp || t.meetingScheduled));
       addEdge('Marcou reunião', 'Reunião realizada', Math.min(t.meetingDone, t.meetingScheduled || t.meetingDone));
       addEdge('Reunião realizada', 'Realizou compra', Math.min(t.sold || t.converted, t.meetingDone || (t.sold || t.converted)));
 
@@ -994,6 +987,7 @@
           series: [{
             type: 'sankey',
             layout: 'none',
+            nodeAlign: 'left',
             emphasis: { focus: 'adjacency' },
             nodeWidth: 18,
             nodeGap: 20,
