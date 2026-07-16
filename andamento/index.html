@@ -731,7 +731,6 @@
           <div class="funnel-header">
             <div>
               <div class="ch-title">Fluxo de progresso dos leads</div>
-              <div class="ch-sub">Diagrama Sankey (Apache ECharts): captação → WhatsApp válido / inválido / social seller → reunião → compra. Somente o WhatsApp válido segue para reunião.</div>
             </div>
             <div class="badge-status bs-ok">${int(metrics.totals.captured)} captados</div>
           </div>
@@ -840,7 +839,21 @@
     }
 
     function aggregateMetrics(payloads) {
-      const totals = { captured: 0, whatsapp: 0, noWhatsapp: 0, socialSeller: 0, meetingScheduled: 0, meetingDone: 0, sold: 0, converted: 0 };
+      const totals = {
+        captured: 0,
+        whatsapp: 0,
+        noWhatsapp: 0,
+        socialSeller: 0,
+        repliedWhatsapp: 0,
+        hot: 0,
+        warm: 0,
+        coldQualified: 0,
+        coldDisqualified: 0,
+        meetingScheduled: 0,
+        meetingDone: 0,
+        sold: 0,
+        converted: 0
+      };
       const campaignMap = new Map();
       const setMap = new Map();
       const creativeMap = new Map();
@@ -856,6 +869,11 @@
         totals.whatsapp += Number(setResume.hasWhatsappCount || 0);
         totals.noWhatsapp += Number(setResume.noWhatsappCount || 0);
         totals.socialSeller += Number(setResume.socialSellerContactCount || 0);
+        totals.repliedWhatsapp += Number(setResume.repliedWhatsappCount || 0);
+        totals.hot += Number(setResume.hotLeadCount || 0);
+        totals.warm += Number(setResume.warmLeadCount || 0);
+        totals.coldQualified += Number(setResume.coldQualifiedLeadCount || 0);
+        totals.coldDisqualified += Number(setResume.coldDisqualifiedLeadCount || 0);
         totals.meetingScheduled += Number(setResume.meetingScheduledCount || 0);
         totals.meetingDone += Number(setResume.meetingDoneCount || 0);
         totals.sold += Number(setResume.soldCount || 0);
@@ -888,49 +906,105 @@
     }
 
     // ── Diagrama Sankey do fluxo de leads (Apache ECharts) ──────────────
-    // Caminho: Captados → (WhatsApp válido / WhatsApp inválido / Em contato
-    //          com social seller) → Marcou reunião → Reunião realizada
-    //          → Realizou compra
+    // Fluxo em colunas por etapa: captação → WhatsApp válido / inválido
+    // → respondeu mensagem / social seller → reunião → qualificação e compra.
     const SANKEY_NODE_COLORS = {
       'Captados': '#01696f',
       'WhatsApp válido': '#0f8c91',
       'WhatsApp inválido': '#a13544',
-      'Contato com o Social Seller': '#9b6c00',
+      'Respondeu mensagem': '#9b6c00',
+      'Contato com o Social Seller': '#b36b00',
       'Marcou reunião': '#a85600',
       'Reunião realizada': '#5b4b8a',
-      'Realizou compra': '#437a22'
+      'Quente': '#437a22',
+      'Morno': '#7c9b27',
+      'Frio qualificado': '#2f7a7a',
+      'Frio desqualificado': '#7a3b2e',
+      'Realizou compra': '#01696f'
     };
 
     function buildSankeyData(metrics) {
       const t = metrics.totals;
-
       const edges = [];
       const addEdge = (source, target, value) => {
-        const v = Math.round(value);
+        const v = Math.max(0, Math.round(value || 0));
         if (v > 0) edges.push({ source, target, value: v });
       };
 
-      // Captação se divide em 3 caminhos possíveis
-      addEdge('Captados', 'WhatsApp válido', t.whatsapp);
-      addEdge('Captados', 'Contato com o Social Seller', t.socialSeller);
-      addEdge('Captados', 'WhatsApp inválido', t.noWhatsapp);
+      const whatsappValid = Math.max(0, t.whatsapp);
+      const whatsappInvalid = Math.max(0, t.noWhatsapp);
+      const replied = Math.max(0, t.repliedWhatsapp);
+      const socialSeller = Math.max(0, t.socialSeller);
+      const scheduled = Math.max(0, t.meetingScheduled);
+      const done = Math.max(0, t.meetingDone);
+      const hot = Math.max(0, t.hot);
+      const warm = Math.max(0, t.warm);
+      const coldQualified = Math.max(0, t.coldQualified);
+      const coldDisqualified = Math.max(0, t.coldDisqualified);
+      const purchased = Math.max(0, t.sold || t.converted);
 
-      // Apenas o WhatsApp válido segue para a etapa de reunião.
-      // "Contato com o Social Seller" e "WhatsApp inválido" são ramos
-      // terminais (ficam próximos do começo do gráfico).
-      addEdge('WhatsApp válido', 'Marcou reunião', Math.min(t.meetingScheduled, t.whatsapp || t.meetingScheduled));
-      addEdge('Marcou reunião', 'Reunião realizada', Math.min(t.meetingDone, t.meetingScheduled || t.meetingDone));
-      addEdge('Reunião realizada', 'Realizou compra', Math.min(t.sold || t.converted, t.meetingDone || (t.sold || t.converted)));
+      addEdge('Captados', 'WhatsApp válido', whatsappValid);
+      addEdge('Captados', 'WhatsApp inválido', whatsappInvalid);
+
+      addEdge('WhatsApp válido', 'Respondeu mensagem', replied);
+      addEdge('WhatsApp válido', 'Contato com o Social Seller', socialSeller);
+
+      addEdge('Respondeu mensagem', 'Marcou reunião', Math.min(scheduled, replied));
+      addEdge('Marcou reunião', 'Reunião realizada', Math.min(done, scheduled));
+
+      addEdge('Reunião realizada', 'Quente', hot);
+      addEdge('Reunião realizada', 'Morno', warm);
+      addEdge('Reunião realizada', 'Frio qualificado', coldQualified);
+      addEdge('Reunião realizada', 'Frio desqualificado', coldDisqualified);
+      addEdge('Reunião realizada', 'Realizou compra', purchased);
 
       const usedNames = new Set();
       edges.forEach(e => { usedNames.add(e.source); usedNames.add(e.target); });
 
       const nodes = Array.from(usedNames).map(name => ({
         name,
+        x: getNodeX(name),
+        y: getNodeY(name),
         itemStyle: { color: SANKEY_NODE_COLORS[name] || '#5b5850' }
       }));
 
       return { nodes, edges };
+    }
+
+    function getNodeX(name) {
+      const columns = {
+        'Captados': 0.02,
+        'WhatsApp válido': 0.25,
+        'WhatsApp inválido': 0.25,
+        'Respondeu mensagem': 0.48,
+        'Contato com o Social Seller': 0.48,
+        'Marcou reunião': 0.71,
+        'Reunião realizada': 0.84,
+        'Quente': 0.96,
+        'Morno': 0.96,
+        'Frio qualificado': 0.96,
+        'Frio desqualificado': 0.96,
+        'Realizou compra': 0.96
+      };
+      return columns[name] ?? 0.5;
+    }
+
+    function getNodeY(name) {
+      const rows = {
+        'Captados': 0.5,
+        'WhatsApp válido': 0.28,
+        'WhatsApp inválido': 0.72,
+        'Respondeu mensagem': 0.36,
+        'Contato com o Social Seller': 0.42,
+        'Marcou reunião': 0.45,
+        'Reunião realizada': 0.45,
+        'Quente': 0.12,
+        'Morno': 0.34,
+        'Frio qualificado': 0.56,
+        'Frio desqualificado': 0.78,
+        'Realizou compra': 0.9
+      };
+      return rows[name] ?? 0.5;
     }
 
     async function renderSankey(metrics) {
@@ -990,8 +1064,9 @@
             nodeAlign: 'left',
             emphasis: { focus: 'adjacency' },
             nodeWidth: 18,
-            nodeGap: 20,
+            nodeGap: 18,
             draggable: false,
+            layoutIterations: 80,
             label: {
               color: '#28251d',
               fontFamily: 'DM Sans',
