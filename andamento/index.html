@@ -1057,7 +1057,19 @@
           },
           scales: {
             y: { beginAtZero: true, ticks: { callback: v => int(v), font: { family: 'DM Sans', size: 11 } }, grid: { color: '#dcd9d5' } },
-            x: { ticks: { font: { family: 'DM Sans', size: 11 } }, grid: { display: false } }
+            x: {
+              ticks: {
+                font: { family: 'DM Sans', size: 11 },
+                maxRotation: 0,
+                minRotation: 0,
+                autoSkip: true,
+                callback: function (value) {
+                  const label = this.getLabelForValue(value);
+                  return label.length > 14 ? label.slice(0, 13) + '…' : label;
+                }
+              },
+              grid: { display: false }
+            }
           }
         }
       });
