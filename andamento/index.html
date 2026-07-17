@@ -958,6 +958,11 @@
       addEdge('Reunião realizada', 'Frio desqualificado', coldDisqualified);
       addEdge('Reunião realizada', 'Realizou compra', purchased);
 
+      addEdge('Quente', 'Realizou compra', purchased);
+      addEdge('Morno', 'Realizou compra', purchased);
+      addEdge('Frio qualificado', 'Realizou compra', purchased);
+      addEdge('Frio desqualificado', 'Realizou compra', purchased);
+
       const usedNames = new Set();
       edges.forEach(e => { usedNames.add(e.source); usedNames.add(e.target); });
 

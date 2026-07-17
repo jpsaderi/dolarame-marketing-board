@@ -7,10 +7,7 @@
   const menuItems = [
     { id: 'overview', label: 'Visão geral', href: isGastosPage ? '../index.html' : isAndamentoPage ? '../index.html' : './index.html' },
     { id: 'andamento', label: 'Andamento', href: isGastosPage ? '../andamento/index.html' : isAndamentoPage ? './index.html' : './andamento/index.html' },
-    { id: 'gastos', label: 'Gastos', href: isGastosPage ? './index.html' : isAndamentoPage ? '../gastos/index.html' : './gastos/index.html' },
-    { id: 'campaigns', label: 'Campanhas', href: '#' },
-    { id: 'leads', label: 'Leads', href: '#' },
-    { id: 'revenue', label: 'Receita', href: '#' }
+    { id: 'gastos', label: 'Gastos', href: isGastosPage ? './index.html' : isAndamentoPage ? '../gastos/index.html' : './gastos/index.html' }
   ];
 
   const menuMarkup = `
