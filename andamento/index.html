@@ -852,7 +852,13 @@
         meetingScheduled: 0,
         meetingDone: 0,
         sold: 0,
-        converted: 0
+        converted: 0,
+        // NOVO: vendas por estágio de qualificação
+        hotSold: 0,
+        warmSold: 0,
+        coldQualifiedSold: 0,
+        coldDisqualifiedSold: 0,
+        noQualificationSold: 0
       };
       const campaignMap = new Map();
       const setMap = new Map();
@@ -878,6 +884,13 @@
         totals.meetingDone += Number(setResume.meetingDoneCount || 0);
         totals.sold += Number(setResume.soldCount || 0);
         totals.converted += Number(setResume.totalConverted || 0);
+
+        // NOVO: soma das vendas quebradas por estágio
+        totals.hotSold += Number(setResume.hotSoldCount || 0);
+        totals.warmSold += Number(setResume.warmSoldCount || 0);
+        totals.coldQualifiedSold += Number(setResume.coldQualifiedSoldCount || 0);
+        totals.coldDisqualifiedSold += Number(setResume.coldDisqualifiedSoldCount || 0);
+        totals.noQualificationSold += Number(setResume.noQualificationSoldCount || 0);
 
         addValue(campaignMap, item.campaign?.name || 'Sem campanha', setResume.capturedCount || 0);
         addValue(setMap, item.ad_sets?.name || 'Sem conjunto', setResume.capturedCount || 0);
@@ -941,7 +954,6 @@
       const warm = Math.max(0, t.warm);
       const coldQualified = Math.max(0, t.coldQualified);
       const coldDisqualified = Math.max(0, t.coldDisqualified);
-      const purchased = Math.max(0, t.sold || t.converted);
 
       addEdge('Captados', 'WhatsApp válido', whatsappValid);
       addEdge('Captados', 'WhatsApp inválido', whatsappInvalid);
@@ -956,12 +968,20 @@
       addEdge('Reunião realizada', 'Morno', warm);
       addEdge('Reunião realizada', 'Frio qualificado', coldQualified);
       addEdge('Reunião realizada', 'Frio desqualificado', coldDisqualified);
-      addEdge('Reunião realizada', 'Realizou compra', purchased);
 
-      addEdge('Quente', 'Realizou compra', purchased);
-      addEdge('Morno', 'Realizou compra', purchased);
-      addEdge('Frio qualificado', 'Realizou compra', purchased);
-      addEdge('Frio desqualificado', 'Realizou compra', purchased);
+      // NOVO: usa a contagem real de vendas por estágio, vinda do n8n,
+      // em vez de estimar com Math.min(purchased, estágio).
+      addEdge('Quente', 'Realizou compra', t.hotSold);
+      addEdge('Morno', 'Realizou compra', t.warmSold);
+      addEdge('Frio qualificado', 'Realizou compra', t.coldQualifiedSold);
+      addEdge('Frio desqualificado', 'Realizou compra', t.coldDisqualifiedSold);
+
+      // NOVO: fallback — venda de lead sem tag de qualificação (ex: tag não
+      // preenchida no CRM). Só aparece no diagrama se realmente existir,
+      // ligando direto de "Reunião realizada" pra não inventar um estágio.
+      if (t.noQualificationSold > 0) {
+        addEdge('Reunião realizada', 'Realizou compra', t.noQualificationSold);
+      }
 
       const usedNames = new Set();
       edges.forEach(e => { usedNames.add(e.source); usedNames.add(e.target); });
