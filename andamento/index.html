@@ -424,7 +424,7 @@
     /* ── Diagrama Sankey (Apache ECharts) ── */
     .sankey-container {
       width: 100%;
-      min-height: 620px;
+      min-height: 440px;
       overflow-x: auto;
     }
 
@@ -959,14 +959,35 @@
       'Frio desqualificado': '#7a3b2e',
       'Realizou compra': '#01696f'
     };
+
     function buildSankeyData(metrics) {
-      const edges = (metrics.sankeyEdges || [])
+      const rawEdges = (metrics.sankeyEdges || [])
         .map(e => ({
           source: e.source,
           target: e.target,
           value: Math.max(0, Math.round(e.value || 0))
         }))
         .filter(e => e.value > 0);
+
+      // NOVO: compressão parcial — valores até SANKEY_SCALE_THRESHOLD ficam
+      // 100% lineares (proporção real preservada). Só o que exceder o
+      // limiar é comprimido, suavizando apenas ramos destoantes (ex: 44
+      // leads) sem distorcer ramos pequenos/médios que já eram legíveis.
+      const SANKEY_SCALE_THRESHOLD = 20;
+      const SANKEY_SCALE_EXPONENT = 0.8; // aplicado só na parte excedente
+
+      const scaleValue = (v) => {
+        if (v <= SANKEY_SCALE_THRESHOLD) return v;
+        const excess = v - SANKEY_SCALE_THRESHOLD;
+        return SANKEY_SCALE_THRESHOLD + Math.pow(excess, SANKEY_SCALE_EXPONENT);
+      };
+
+      const edges = rawEdges.map(e => ({
+        source: e.source,
+        target: e.target,
+        value: scaleValue(e.value),
+        realValue: e.value
+      }));
 
       const usedNames = new Set();
       edges.forEach(e => { usedNames.add(e.source); usedNames.add(e.target); });
@@ -1064,8 +1085,10 @@
             textStyle: { color: '#f7f6f2', fontFamily: 'DM Sans', fontSize: 12 },
             formatter: (params) => {
               if (params.dataType === 'edge') {
-                const v = int(params.data.value);
-                return `<strong>${params.data.source}</strong> → <strong>${params.data.target}</strong><br/>${v} lead${params.data.value !== 1 ? 's' : ''}`;
+                // NOVO: exibe o valor real, não o valor comprimido usado pro layout
+                const raw = params.data.realValue ?? params.data.value;
+                const v = int(raw);
+                return `<strong>${params.data.source}</strong> → <strong>${params.data.target}</strong><br/>${v} lead${raw !== 1 ? 's' : ''}`;
               }
               return `<strong>${params.name}</strong>`;
             }
