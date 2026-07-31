@@ -853,16 +853,29 @@
         meetingDone: 0,
         sold: 0,
         converted: 0,
-        // NOVO: vendas por estágio de qualificação
         hotSold: 0,
         warmSold: 0,
         coldQualifiedSold: 0,
         coldDisqualifiedSold: 0,
-        noQualificationSold: 0
+        noQualificationSold: 0,
+        // NOVO: mantidos apenas para eventuais KPIs futuros; o Sankey em si
+        // não depende mais destes três campos, e sim de sankeyEdges abaixo.
+        altaRendaContact: 0,
+        socialSellerFromWhatsapp: 0,
+        socialSellerFromNoWhatsapp: 0
       };
       const campaignMap = new Map();
       const setMap = new Map();
       const creativeMap = new Map();
+
+      // NOVO: agrega os edges do Sankey (já vêm prontos do n8n) somando o
+      // value de cada par source->target em todos os payloads filtrados.
+      const edgeMap = new Map();
+      const addEdgeValue = (source, target, value) => {
+        const key = `${source}|||${target}`;
+        if (!edgeMap.has(key)) edgeMap.set(key, { source, target, value: 0 });
+        edgeMap.get(key).value += Number(value || 0);
+      };
 
       function addValue(map, key, amount) {
         if (!map.has(key)) map.set(key, { label: key, value: 0 });
@@ -885,12 +898,22 @@
         totals.sold += Number(setResume.soldCount || 0);
         totals.converted += Number(setResume.totalConverted || 0);
 
-        // NOVO: soma das vendas quebradas por estágio
         totals.hotSold += Number(setResume.hotSoldCount || 0);
         totals.warmSold += Number(setResume.warmSoldCount || 0);
         totals.coldQualifiedSold += Number(setResume.coldQualifiedSoldCount || 0);
         totals.coldDisqualifiedSold += Number(setResume.coldDisqualifiedSoldCount || 0);
         totals.noQualificationSold += Number(setResume.noQualificationSoldCount || 0);
+
+        // NOVO
+        totals.altaRendaContact += Number(setResume.altaRendaContactCount || 0);
+        totals.socialSellerFromWhatsapp += Number(setResume.socialSellerFromWhatsappCount || 0);
+        totals.socialSellerFromNoWhatsapp += Number(setResume.socialSellerFromNoWhatsappCount || 0);
+
+        // NOVO: soma os edges prontos deste ad set. Se o campo não existir
+        // (payload antigo, antes da mudança no n8n), o Sankey simplesmente
+        // fica vazio para este item — sem quebrar o restante do dashboard.
+        const edges = item.ad_sets?.sankey?.edges || [];
+        edges.forEach(e => addEdgeValue(e.source, e.target, e.value));
 
         addValue(campaignMap, item.campaign?.name || 'Sem campanha', setResume.capturedCount || 0);
         addValue(setMap, item.ad_sets?.name || 'Sem conjunto', setResume.capturedCount || 0);
@@ -903,12 +926,12 @@
 
       return {
         totals,
+        sankeyEdges: Array.from(edgeMap.values()).filter(e => e.value > 0), // NOVO
         campaignSeries: Array.from(campaignMap.values()).sort((a, b) => b.value - a.value),
         setSeries: Array.from(setMap.values()).sort((a, b) => b.value - a.value),
         creativeSeries: Array.from(creativeMap.values()).sort((a, b) => b.value - a.value)
       };
     }
-
     function renderKPIs(metrics) {
       document.getElementById('kpisArea').innerHTML = `
         <div class="card kpi"><div class="l">Captados</div><div class="v">${int(metrics.totals.captured)}</div><div class="m">captações registradas</div></div>
@@ -925,6 +948,7 @@
       'Captados': '#01696f',
       'WhatsApp válido': '#0f8c91',
       'WhatsApp inválido': '#a13544',
+      'Contato com o Alta renda': '#c98f00',
       'Respondeu mensagem': '#9b6c00',
       'Contato com o Social Seller': '#b36b00',
       'Marcou reunião': '#a85600',
@@ -935,53 +959,14 @@
       'Frio desqualificado': '#7a3b2e',
       'Realizou compra': '#01696f'
     };
-
     function buildSankeyData(metrics) {
-      const t = metrics.totals;
-      const edges = [];
-      const addEdge = (source, target, value) => {
-        const v = Math.max(0, Math.round(value || 0));
-        if (v > 0) edges.push({ source, target, value: v });
-      };
-
-      const whatsappValid = Math.max(0, t.whatsapp);
-      const whatsappInvalid = Math.max(0, t.noWhatsapp);
-      const replied = Math.max(0, t.repliedWhatsapp);
-      const socialSeller = Math.max(0, t.socialSeller);
-      const scheduled = Math.max(0, t.meetingScheduled);
-      const done = Math.max(0, t.meetingDone);
-      const hot = Math.max(0, t.hot);
-      const warm = Math.max(0, t.warm);
-      const coldQualified = Math.max(0, t.coldQualified);
-      const coldDisqualified = Math.max(0, t.coldDisqualified);
-
-      addEdge('Captados', 'WhatsApp válido', whatsappValid);
-      addEdge('Captados', 'WhatsApp inválido', whatsappInvalid);
-
-      addEdge('WhatsApp válido', 'Respondeu mensagem', replied);
-      addEdge('WhatsApp válido', 'Contato com o Social Seller', socialSeller);
-
-      addEdge('Respondeu mensagem', 'Marcou reunião', Math.min(scheduled, replied));
-      addEdge('Marcou reunião', 'Reunião realizada', Math.min(done, scheduled));
-
-      addEdge('Reunião realizada', 'Quente', hot);
-      addEdge('Reunião realizada', 'Morno', warm);
-      addEdge('Reunião realizada', 'Frio qualificado', coldQualified);
-      addEdge('Reunião realizada', 'Frio desqualificado', coldDisqualified);
-
-      // NOVO: usa a contagem real de vendas por estágio, vinda do n8n,
-      // em vez de estimar com Math.min(purchased, estágio).
-      addEdge('Quente', 'Realizou compra', t.hotSold);
-      addEdge('Morno', 'Realizou compra', t.warmSold);
-      addEdge('Frio qualificado', 'Realizou compra', t.coldQualifiedSold);
-      addEdge('Frio desqualificado', 'Realizou compra', t.coldDisqualifiedSold);
-
-      // NOVO: fallback — venda de lead sem tag de qualificação (ex: tag não
-      // preenchida no CRM). Só aparece no diagrama se realmente existir,
-      // ligando direto de "Reunião realizada" pra não inventar um estágio.
-      if (t.noQualificationSold > 0) {
-        addEdge('Reunião realizada', 'Realizou compra', t.noQualificationSold);
-      }
+      const edges = (metrics.sankeyEdges || [])
+        .map(e => ({
+          source: e.source,
+          target: e.target,
+          value: Math.max(0, Math.round(e.value || 0))
+        }))
+        .filter(e => e.value > 0);
 
       const usedNames = new Set();
       edges.forEach(e => { usedNames.add(e.source); usedNames.add(e.target); });
@@ -1001,6 +986,7 @@
         'Captados': 0.02,
         'WhatsApp válido': 0.25,
         'WhatsApp inválido': 0.25,
+        'Contato com o Alta renda': 0.48,   // NOVO
         'Respondeu mensagem': 0.48,
         'Contato com o Social Seller': 0.48,
         'Marcou reunião': 0.71,
@@ -1019,8 +1005,9 @@
         'Captados': 0.5,
         'WhatsApp válido': 0.28,
         'WhatsApp inválido': 0.72,
+        'Contato com o Alta renda': 0.18,   // NOVO — acima de "Respondeu mensagem"
         'Respondeu mensagem': 0.36,
-        'Contato com o Social Seller': 0.42,
+        'Contato com o Social Seller': 0.55, // ajustado: agora recebe de dois ramos
         'Marcou reunião': 0.45,
         'Reunião realizada': 0.45,
         'Quente': 0.12,
