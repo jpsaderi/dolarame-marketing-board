@@ -1075,15 +1075,21 @@
             layout: 'none',
             nodeAlign: 'left',
             emphasis: { focus: 'adjacency' },
-            nodeWidth: 18,
-            nodeGap: 18,
+            nodeWidth: 14,
+            nodeGap: 12,
             draggable: false,
             layoutIterations: 80,
             label: {
               color: '#28251d',
               fontFamily: 'DM Sans',
               fontWeight: 600,
-              fontSize: 12
+              fontSize: 11,
+              formatter: (params) => {
+                // NOVO: quebra nomes longos em 2 linhas pra não estourar a largura da coluna
+                return params.name.length > 16
+                  ? params.name.replace(/ (?=[^ ]*$)/, '\n')
+                  : params.name;
+              }
             },
             lineStyle: { color: 'gradient', curveness: 0.5, opacity: 0.35 },
             itemStyle: { borderWidth: 0 },
